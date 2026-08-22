@@ -1,0 +1,6 @@
+{
+  "name": "CoachMind Basketball",
+  "description": "Plataforma inteligente de gestión, pizarra táctica, diseño de entrenamientos con IA y estadísticas para entrenadores de baloncesto.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

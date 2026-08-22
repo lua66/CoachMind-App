@@ -1,0 +1,195 @@
+{
+  "name": "CoachMind Baloncesto - Plataforma para Entrenadores",
+  "short_name": "CoachMind",
+  "description": "Plataforma inteligente de gestión, pizarra táctica, simulador de partidos y entrenamientos con IA para entrenadores de baloncesto.",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "dir": "ltr",
+  "lang": "es-ES",
+  "display": "standalone",
+  "display_override": [
+    "tabbed",
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "tab_strip": {
+    "home_tab": "auto",
+    "new_tab_button": {
+      "url": "/?tab=tactics"
+    }
+  },
+  "orientation": "any",
+  "background_color": "#0B132B",
+  "theme_color": "#0B132B",
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://coach-mind-app.vercel.app/manifest.json"
+    }
+  ],
+  "categories": [
+    "sports",
+    "productivity",
+    "utilities",
+    "education"
+  ],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 480
+  },
+  "handle_links": "preferred",
+  "scope_extensions": [
+    {
+      "origin": "https://coach-mind-app.vercel.app"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/?tab=tactics",
+      "name": "Pizarra y Sesiones CoachMind",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "accept": {
+        "application/json": [".json", ".coachmind"]
+      }
+    }
+  ],
+  "widgets": [
+    {
+      "name": "Pizarra Rápida CoachMind",
+      "short_name": "CoachMind",
+      "description": "Acceso rápido a pizarra y estadísticas de baloncesto",
+      "tag": "coachmind-widget",
+      "template": "widget-template",
+      "ms_ac_template": "/widget.json",
+      "data": "/widget-data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "/screenshot-wide.png",
+          "sizes": "1920x1080",
+          "label": "Vista de widget en escritorio"
+        }
+      ],
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "note_taking": {
+    "new_note_url": "/?tab=philosophy"
+  },
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-wide.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Pizarra táctica y simulador de partidos en escritorio"
+    },
+    {
+      "src": "/screenshot-narrow.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Gestión táctica, ejercicios con IA y plantilla en móvil"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pizarra Táctica",
+      "short_name": "Táctica",
+      "description": "Abrir la pizarra táctica interactiva",
+      "url": "/?tab=tactics",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Simulador de Partido",
+      "short_name": "Simulador",
+      "description": "Simulación y toma de decisiones en tiempo real",
+      "url": "/?tab=simulator",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Asistente IA",
+      "short_name": "Coach IA",
+      "description": "Consultar al asistente técnico con Inteligencia Artificial",
+      "url": "/?tab=ai-coach",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/?share=true",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+coachmind",
+      "url": "/?action=%s"
+    }
+  ]
+}
