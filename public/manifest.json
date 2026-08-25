@@ -28,7 +28,7 @@
   "related_applications": [
     {
       "platform": "webapp",
-      "url": "https://coach-mind-app.vercel.app//manifest.json"
+      "url": "https://coach-mind-app.vercel.app/manifest.json"
     }
   ],
   "categories": [
@@ -47,7 +47,7 @@
   "handle_links": "preferred",
   "scope_extensions": [
     {
-      "origin": "https://coach-mind-app.vercel.app/"
+      "origin": "https://coach-mind-app.vercel.app"
     }
   ],
   "file_handlers": [
