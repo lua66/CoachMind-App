@@ -21,6 +21,7 @@ import { TrialLimitModal } from './components/TrialLimitModal';
 import { ExitLikeModal } from './components/ExitLikeModal';
 import { WhatsAppInterviewModal } from './components/WhatsAppInterviewModal';
 import { consumeTrialAction } from './utils/trialManager';
+import { INITIAL_PLAYERS } from './data/initialData';
 import { auth, onAuthStateChanged, signOut, User } from './lib/firebase';
 import {
   subscribeToCoachData,
@@ -341,12 +342,12 @@ export default function App() {
 
   const [players, setPlayers] = useState<Player[]>(() => {
     const local = localStorage.getItem('coachmind_players');
-    if (!local) return [];
+    if (!local) return INITIAL_PLAYERS;
     try {
       const parsed = JSON.parse(local);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PLAYERS;
     } catch {
-      return [];
+      return INITIAL_PLAYERS;
     }
   });
 
@@ -708,10 +709,13 @@ export default function App() {
         {currentView === 'players' && (
           <PlayersView
             players={players}
+            calendarEvents={calendarEvents}
             onAddPlayer={handleAddPlayer}
             onDeletePlayer={handleDeletePlayer}
             onUpdatePlayer={handleUpdatePlayerStats}
+            onUpdateCalendarEvent={handleUpdateCalendarEvent}
             onNavigateToStats={() => setCurrentView('stats')}
+            onNavigateToCalendar={() => setCurrentView('calendar')}
             userProfile={userProfile}
             onOpenTrialModal={handleOpenTrialModal}
           />

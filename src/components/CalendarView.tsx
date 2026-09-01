@@ -23,6 +23,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { CalendarEvent, EventType, MatchLeg, Player, UserProfile } from '../types';
+import { INITIAL_PLAYERS } from '../data/initialData';
 import { consumeTrialAction } from '../utils/trialManager';
 
 interface CalendarViewProps {
@@ -61,6 +62,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null);
+
+  const effectivePlayers = players && players.length > 0 ? players : INITIAL_PLAYERS;
 
   // Month navigation state
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -169,7 +172,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     existingAbsents.forEach((absentItem) => {
       const cleanNorm = normalizePlayerName(absentItem);
-      const matched = players.find(
+      const matched = effectivePlayers.find(
         (p) =>
           normalizePlayerName(p.name) === cleanNorm ||
           p.name.trim().toLowerCase() === absentItem.trim().toLowerCase()
@@ -915,10 +918,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     )}
                   </div>
 
-                  {players.length > 0 ? (
+                  {effectivePlayers.length > 0 ? (
                     <div className="space-y-2">
                       <div className="flex flex-wrap gap-1.5">
-                        {players.map((p) => {
+                        {effectivePlayers.map((p) => {
                           const isAbsent = isPlayerMarkedAbsent(p.name, selectedAbsentPlayers);
                           return (
                             <button

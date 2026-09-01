@@ -15,16 +15,22 @@ import {
   LayoutGrid,
   ListFilter,
   CheckCircle2,
+  Trophy,
 } from 'lucide-react';
-import { Player, PlayerRole, UserProfile } from '../types';
+import { CalendarEvent, Player, PlayerRole, UserProfile } from '../types';
+import { INITIAL_PLAYERS } from '../data/initialData';
 import { PlayerAttendanceView } from './PlayerAttendanceView';
+import { MatchAttendanceView } from './MatchAttendanceView';
 
 interface PlayersViewProps {
   players: Player[];
+  calendarEvents?: CalendarEvent[];
   onAddPlayer?: (player: Player) => void;
   onDeletePlayer?: (id: string) => void;
   onUpdatePlayer?: (player: Player) => void;
+  onUpdateCalendarEvent?: (event: CalendarEvent) => void;
   onNavigateToStats?: () => void;
+  onNavigateToCalendar?: () => void;
   userProfile?: UserProfile | null;
   onOpenTrialModal?: (mode?: 'general_action' | 'ficha_entrenador') => void;
 }
@@ -111,16 +117,24 @@ const ROLES_ORDER: PlayerRole[] = ['Base', 'Escolta', 'Alero', 'Ala-PÃ­vot', 'PÃ
 
 export const PlayersView: React.FC<PlayersViewProps> = ({
   players,
+  calendarEvents = [],
   onAddPlayer,
   onDeletePlayer,
   onUpdatePlayer,
+  onUpdateCalendarEvent,
   onNavigateToStats,
+  onNavigateToCalendar,
   userProfile,
   onOpenTrialModal,
 }) => {
-  const [activeMainTab, setActiveMainTab] = useState<'roles' | 'attendance' | 'roster'>('roles');
+  const effectivePlayers = players && players.length > 0 ? players : INITIAL_PLAYERS;
+  const [activeMainTab, setActiveMainTab] = useState<'roles' | 'attendance' | 'match_attendance' | 'roster'>('roles');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<PlayerRole | null>(null);
+
+  const matchEventsCount = calendarEvents.filter(
+    (ev) => ev.type === 'match' || ev.type === 'friendly'
+  ).length;
 
   // Modal Add Player
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -299,6 +313,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                 {activeMainTab === 'attendance'
                   ? 'Control de Asistencia Diaria'
+                  : activeMainTab === 'match_attendance'
+                  ? 'Control de Asistencia a Partidos'
                   : activeMainTab === 'roster'
                   ? 'Plantilla Completa del Equipo'
                   : selectedRole
@@ -308,6 +324,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
               <p className="text-xs font-semibold text-slate-500">
                 {activeMainTab === 'attendance'
                   ? 'Pasa asistencia diaria, registra justificaciones y analiza ratios acumulados'
+                  : activeMainTab === 'match_attendance'
+                  ? 'Convocatorias y bajas sincronizadas con los partidos del calendario (Local y Visitante)'
                   : activeMainTab === 'roster'
                   ? 'Listado general con dorsales, roles, promedios y porcentajes de asistencia'
                   : selectedRole
@@ -391,6 +409,31 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           <button
             type="button"
             onClick={() => {
+              setActiveMainTab('match_attendance');
+              setSelectedRole(null);
+            }}
+            className={`px-4 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeMainTab === 'match_attendance'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+            }`}
+          >
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <span>Asistencias a Partidos</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeMainTab === 'match_attendance'
+                  ? 'bg-blue-500/30 text-white'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {matchEventsCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               setActiveMainTab('roster');
               setSelectedRole(null);
             }}
@@ -401,7 +444,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
             }`}
           >
             <ListFilter className="w-4 h-4" />
-            <span>Plantilla Completa ({players.length})</span>
+            <span>Plantilla Completa ({effectivePlayers.length})</span>
           </button>
         </div>
       </div>
@@ -409,8 +452,20 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       {/* SUB-VIEW 1: ASISTENCIA DIARIA */}
       {activeMainTab === 'attendance' && (
         <PlayerAttendanceView
-          players={players}
+          players={effectivePlayers}
           onUpdatePlayer={onUpdatePlayer}
+          userProfile={userProfile}
+          onOpenTrialModal={onOpenTrialModal}
+        />
+      )}
+
+      {/* SUB-VIEW 2: ASISTENCIA A PARTIDOS */}
+      {activeMainTab === 'match_attendance' && (
+        <MatchAttendanceView
+          players={effectivePlayers}
+          calendarEvents={calendarEvents}
+          onUpdateCalendarEvent={onUpdateCalendarEvent}
+          onNavigateToCalendar={onNavigateToCalendar}
           userProfile={userProfile}
           onOpenTrialModal={onOpenTrialModal}
         />
@@ -464,7 +519,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {players.filter(filterMatchesSearch).map((p) => {
+                {effectivePlayers.filter(filterMatchesSearch).map((p) => {
                   const cfg = ROLE_CONFIG[p.role];
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
@@ -561,7 +616,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
             {ROLES_ORDER.map((roleKey) => {
               const config = ROLE_CONFIG[roleKey];
-              const totalRolePlayers = players.filter((p) => p.role === roleKey);
+              const totalRolePlayers = effectivePlayers.filter((p) => p.role === roleKey);
               const matchedRolePlayers = totalRolePlayers.filter(filterMatchesSearch);
               const isSearching = searchTerm.trim().length > 0;
 
@@ -642,7 +697,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
 
               {ROLES_ORDER.map((roleKey) => {
                 const config = ROLE_CONFIG[roleKey];
-                const count = players.filter((p) => p.role === roleKey).length;
+                const count = effectivePlayers.filter((p) => p.role === roleKey).length;
                 const isSelected = selectedRole === roleKey;
 
                 return (
@@ -694,7 +749,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           {/* DETALLE COMPLETO DE LA TARJETA SELECCIONADA */}
           {(() => {
             const config = ROLE_CONFIG[selectedRole];
-            const rolePlayers = players
+            const rolePlayers = effectivePlayers
               .filter((p) => p.role === selectedRole)
               .filter(filterMatchesSearch);
 
