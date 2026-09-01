@@ -21,6 +21,7 @@ import {
   RotateCcw,
   UserCheck,
   UserX,
+  AlertTriangle,
 } from 'lucide-react';
 import { CalendarEvent, EventType, MatchLeg, Player, UserProfile } from '../types';
 import { INITIAL_PLAYERS } from '../data/initialData';
@@ -107,6 +108,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const startOffset = (firstDayOfWeek + 6) % 7;
 
   const handleDayClick = (date: string) => {
+    const existingEventsOnDate = events.filter((e) => e.date === date);
+    if (existingEventsOnDate.length > 0) {
+      // Si el día ya tiene evento, abrir directamente el evento existente
+      setSelectedEvent(existingEventsOnDate[0]);
+      return;
+    }
+
+    if (!userProfile) {
+      if (onOpenTrialModal) onOpenTrialModal('general_action');
+      return;
+    }
     setEditingEvent(null);
     setDateStr(date);
     setTitle('');
@@ -301,6 +313,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       }
       setEditingEvent(null);
     } else {
+      // Verificar si ya existe un evento en este día para evitar duplicados en días ocupados
+      const conflictEvent = events.find((ev) => ev.date === dateStr);
+      if (conflictEvent) {
+        handleOpenEditModal(conflictEvent);
+        return;
+      }
+
       const newEvent: CalendarEvent = {
         id: `ev-${Date.now()}`,
         title: eventType === 'training' ? (title || 'Entrenamiento de Equipo') : `vs ${opponent || 'Rival'}`,
@@ -461,6 +480,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               const formattedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
               const dayEvents = events.filter((e) => e.date === formattedDate);
               const isToday = formattedDate === new Date().toISOString().split('T')[0];
+              const isOccupied = dayEvents.length > 0;
 
               return (
                 <div
@@ -469,21 +489,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   className={`h-20 p-1.5 rounded-xl border flex flex-col justify-between transition-all cursor-pointer group ${
                     isToday
                       ? 'border-blue-500 bg-blue-50/30 font-bold hover:bg-blue-100/50'
+                      : isOccupied
+                      ? 'border-slate-200 bg-slate-50/70 hover:bg-blue-50/40 hover:border-blue-300 shadow-2xs'
                       : 'border-slate-100 bg-white hover:bg-blue-50/40 hover:border-blue-200 hover:shadow-xs'
                   }`}
-                  title={`Haz clic para añadir un evento el ${dayNum} de ${monthNames[currentMonth]}`}
+                  title={
+                    isOccupied
+                      ? `Día ocupado: haz clic para ver o editar ${dayEvents.length > 1 ? `los ${dayEvents.length} eventos` : 'el evento'}`
+                      : `Haz clic para añadir un evento el ${dayNum} de ${monthNames[currentMonth]}`
+                  }
                 >
                   <div className="flex items-center justify-between">
                     <span
                       className={`text-xs ${
                         isToday
                           ? 'w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-extrabold'
+                          : isOccupied
+                          ? 'text-slate-900 group-hover:text-blue-600 font-extrabold'
                           : 'text-slate-700 group-hover:text-blue-600 font-bold'
                       }`}
                     >
                       {dayNum}
                     </span>
-                    <Plus className="w-3 h-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    {isOccupied ? (
+                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        {dayEvents.length}
+                      </span>
+                    ) : (
+                      <Plus className="w-3 h-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    )}
                   </div>
 
                   <div className="space-y-1 overflow-y-auto custom-scrollbar">
@@ -875,6 +909,34 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Conflict notice if date already has an event */}
+              {(() => {
+                const conflictEvent = !editingEvent && dateStr ? events.find((ev) => ev.date === dateStr) : null;
+                if (!conflictEvent) return null;
+                return (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+                    <div className="flex items-start gap-2.5">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-extrabold text-amber-900">
+                          Este día ({dateStr}) ya tiene un evento programado:
+                        </p>
+                        <p className="text-amber-800 text-[11px] mt-0.5 font-medium">
+                          &quot;{conflictEvent.title || (conflictEvent.opponent ? `vs ${conflictEvent.opponent}` : 'Evento')}&quot; ({conflictEvent.startTime})
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditModal(conflictEvent)}
+                      className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs shrink-0 cursor-pointer shadow-xs transition-all"
+                    >
+                      Abrir y editar existente
+                    </button>
+                  </div>
+                );
+              })()}
 
               {/* Location */}
               <div>
