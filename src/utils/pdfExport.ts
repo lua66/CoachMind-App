@@ -1,63 +1,313 @@
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { SavedTraining, TrainingReviewReport } from '../types';
+import { SavedTraining, DrillItem, TrainingReviewReport } from '../types';
 
 /**
- * Exports any DOM element as a high-quality multi-page PDF using html2canvas & jsPDF.
+ * Native, bulletproof PDF Generator for Full Training Sessions using jsPDF.
+ * Generates sharp, vector-quality multi-page PDF documents and immediately triggers file download.
  */
-export const exportElementToPdf = async (
-  element: HTMLElement,
-  filename: string,
-  onProgress?: (isGenerating: boolean) => void
-): Promise<boolean> => {
+export const exportTrainingSessionToPdf = (training: SavedTraining): boolean => {
   try {
-    if (onProgress) onProgress(true);
-
-    // Save previous styles if needed
-    const canvas = await html2canvas(element, {
-      scale: 2, // High resolution for sharp text and diagrams
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight,
-    });
-
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({
+    const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4',
     });
 
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 16;
+    const contentWidth = pageWidth - margin * 2;
+    let y = margin;
 
-    let heightLeft = imgHeight;
-    let position = 0;
+    const checkPageBreak = (neededHeight: number) => {
+      if (y + neededHeight > pageHeight - margin - 12) {
+        doc.addPage();
+        y = margin;
+        drawPageHeader();
+      }
+    };
 
-    // Add first page
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
+    const drawPageHeader = () => {
+      // Top header banner
+      doc.setFillColor(15, 23, 42); // slate-900
+      doc.rect(margin, y, contentWidth, 14, 'F');
 
-    // Add subsequent pages if the content spans multiple pages
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('COACHMIND - SESIÓN DE ENTRENAMIENTO DE BALONCESTO', margin + 4, y + 9);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(251, 146, 60); // orange-400
+      const dateStr = training.createdAt || new Date().toLocaleDateString('es-ES');
+      doc.text(dateStr, pageWidth - margin - 25, y + 9);
+
+      y += 18;
+    };
+
+    // First Page Initial Header
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(margin, y, contentWidth, 24, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('COACHMIND BALONCESTO', margin + 4, y + 9);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text('Planificación Táctica Oficial y Metodología Deportiva', margin + 4, y + 16);
+
+    const dateStr = training.createdAt || new Date().toLocaleDateString('es-ES');
+    doc.setTextColor(251, 146, 60); // orange-400
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Fecha: ${dateStr}`, pageWidth - margin - 35, y + 16);
+
+    y += 28;
+
+    // Session Title & Core Meta Box
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(margin, y, contentWidth, 26, 2, 2, 'FD');
+
+    // Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42); // slate-900
+    const titleText = training.title.length > 55 ? training.title.slice(0, 52) + '...' : training.title;
+    doc.text(titleText, margin + 4, y + 8);
+
+    // Meta row
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105); // slate-600
+    const totalTime =
+      training.plan?.totalDuration ||
+      training.durationMinutes ||
+      60;
+    const metaLine1 = `Sección: ${training.section || 'General'}  |  Categoría: ${training.category || 'Senior'} (${training.ageRange || 'Libre'})  |  Nivel: ${training.level || 'Estándar'}`;
+    doc.text(metaLine1, margin + 4, y + 15);
+
+    const metaLine2 = `Intensidad: ${training.intensity || 'Media'}  |  Duración Total: ${totalTime} minutos  |  Ejercicios: ${training.exerciseCount || (training.plan?.mainDrills?.length || 0) + (training.plan?.warmup?.length || 0) + (training.plan?.cooldown?.length || 0)}`;
+    doc.text(metaLine2, margin + 4, y + 21);
+
+    y += 31;
+
+    // Objective Box
+    if (training.objective) {
+      checkPageBreak(25);
+      doc.setFillColor(255, 247, 237); // orange-50
+      doc.setDrawColor(249, 115, 22); // orange-500
+      doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(194, 65, 12); // orange-700
+      doc.text('OBJETIVO PRINCIPAL DE LA SESIÓN:', margin + 4, y + 6);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 41, 59);
+      const splitObj = doc.splitTextToSize(training.objective, contentWidth - 8);
+      doc.text(splitObj.slice(0, 2), margin + 4, y + 12);
+
+      y += 22;
     }
 
-    const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-    pdf.save(cleanFilename);
+    // AI Review Report Summary if attached
+    if (training.plan?.reviewReport) {
+      const review = training.plan.reviewReport;
+      checkPageBreak(28);
+
+      const isHigh = review.alignmentScore >= 80;
+      doc.setFillColor(15, 23, 42); // slate-900
+      doc.setDrawColor(30, 41, 59);
+      doc.roundedRect(margin, y, contentWidth, 24, 2, 2, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(251, 191, 36); // amber-400
+      doc.text('AUDITORÍA METODOLÓGICA IA', margin + 4, y + 6.5);
+
+      doc.setFontSize(8.5);
+      doc.setTextColor(isHigh ? 52 : 251, isHigh ? 211 : 191, isHigh ? 153 : 36);
+      doc.text(`Coherencia Táctica: ${review.alignmentScore}%`, pageWidth - margin - 45, y + 6.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(226, 232, 240);
+      const splitSummary = doc.splitTextToSize(review.summary, contentWidth - 8);
+      doc.text(splitSummary.slice(0, 2), margin + 4, y + 13);
+
+      y += 28;
+    }
+
+    // Helper for rendering drills
+    const renderDrillSection = (
+      sectionTitle: string,
+      drills: DrillItem[],
+      colorTheme: { headerBg: [number, number, number]; accent: [number, number, number] }
+    ) => {
+      if (!drills || drills.length === 0) return;
+
+      checkPageBreak(20);
+
+      // Section Title Banner
+      doc.setFillColor(...colorTheme.headerBg);
+      doc.roundedRect(margin, y, contentWidth, 8, 1.5, 1.5, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text(sectionTitle.toUpperCase(), margin + 4, y + 5.5);
+
+      y += 11;
+
+      drills.forEach((drill, idx) => {
+        checkPageBreak(35);
+
+        // Drill Box
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(226, 232, 240);
+        
+        const drillBoxStartY = y;
+        let drillBoxHeight = 32;
+
+        // Calculate needed height for description and tips
+        const splitDesc = drill.description ? doc.splitTextToSize(drill.description, contentWidth - 10) : [];
+        const hasTips = drill.coachingTips && drill.coachingTips.length > 0;
+        const tipsHeight = hasTips ? Math.min(drill.coachingTips.length * 4.5 + 8, 20) : 0;
+        const descHeight = Math.min(splitDesc.length * 4, 25);
+        
+        drillBoxHeight = 14 + descHeight + tipsHeight + 4;
+
+        doc.roundedRect(margin, drillBoxStartY, contentWidth, drillBoxHeight, 2, 2, 'FD');
+
+        // Drill Header inside box
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(margin, drillBoxStartY, contentWidth, 8, 2, 2, 'F');
+        doc.rect(margin, drillBoxStartY + 6, contentWidth, 2, 'F');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(15, 23, 42);
+        const drillHeader = `${idx + 1}. ${drill.title}`;
+        doc.text(drillHeader, margin + 4, drillBoxStartY + 5.5);
+
+        // Time & Players on the right
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        const drillMeta = `${drill.durationMinutes} min  |  ${drill.playersCount || 'Equipo'}`;
+        doc.text(drillMeta, pageWidth - margin - 40, drillBoxStartY + 5.5);
+
+        let curY = drillBoxStartY + 12;
+
+        // Description
+        if (splitDesc.length > 0) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(51, 65, 85);
+          doc.text(splitDesc.slice(0, 5), margin + 4, curY);
+          curY += Math.min(splitDesc.length * 4, 20) + 2;
+        }
+
+        // Coaching Tips
+        if (hasTips) {
+          doc.setFillColor(239, 246, 255); // blue-50
+          doc.setDrawColor(191, 219, 254);
+          const boxH = Math.min(drill.coachingTips.length * 4.5 + 4, 18);
+          doc.roundedRect(margin + 3, curY, contentWidth - 6, boxH, 1.5, 1.5, 'FD');
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7.5);
+          doc.setTextColor(29, 78, 216); // blue-700
+          doc.text('Claves de Corrección:', margin + 6, curY + 4);
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.setTextColor(30, 41, 59);
+
+          drill.coachingTips.slice(0, 3).forEach((tip, tIdx) => {
+            const tipText = `• ${tip.length > 80 ? tip.slice(0, 77) + '...' : tip}`;
+            doc.text(tipText, margin + 6, curY + 8 + tIdx * 4);
+          });
+
+          curY += boxH + 2;
+        }
+
+        y += drillBoxHeight + 4;
+      });
+
+      y += 2;
+    };
+
+    // 1. Warmup
+    if (training.plan?.warmup && training.plan.warmup.length > 0) {
+      renderDrillSection('1. Fase de Calentamiento / Activación', training.plan.warmup, {
+        headerBg: [234, 88, 12], // orange-600
+        accent: [249, 115, 22],
+      });
+    }
+
+    // 2. Main Drills
+    if (training.plan?.mainDrills && training.plan.mainDrills.length > 0) {
+      renderDrillSection('2. Fase Principal / Ejercicios Tácticos', training.plan.mainDrills, {
+        headerBg: [37, 99, 235], // blue-600
+        accent: [59, 130, 246],
+      });
+    }
+
+    // 3. Cooldown
+    if (training.plan?.cooldown && training.plan.cooldown.length > 0) {
+      renderDrillSection('3. Fase Final / Vuelta a la Calma', training.plan.cooldown, {
+        headerBg: [5, 150, 105], // emerald-600
+        accent: [16, 185, 129],
+      });
+    }
+
+    // Coach Tactical Notes
+    if (training.plan?.coachNotes && training.plan.coachNotes.length > 0) {
+      checkPageBreak(25);
+      doc.setFillColor(241, 245, 249); // slate-100
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(margin, y, contentWidth, 20, 2, 2, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text('NOTAS Y RECORDATORIOS DEL ENTRENADOR', margin + 4, y + 6);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85);
+
+      training.plan.coachNotes.slice(0, 3).forEach((note, nIdx) => {
+        doc.text(`• ${note}`, margin + 4, y + 11 + nIdx * 4);
+      });
+
+      y += 24;
+    }
+
+    // Add footer on all pages
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
+      doc.text('CoachMind Basketball • Sistema Inteligente de Planificación', margin, pageHeight - 6);
+      doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin - 22, pageHeight - 6);
+    }
+
+    const cleanTitle = training.title.replace(/[^a-zA-Z0-9_-]/g, '_') || 'Sesion';
+    doc.save(`Entrenamiento_CoachMind_${cleanTitle}.pdf`);
     return true;
   } catch (error) {
-    console.error('Error generating PDF with html2canvas:', error);
+    console.error('Error generating PDF with jsPDF:', error);
     return false;
-  } finally {
-    if (onProgress) onProgress(false);
   }
 };
 
@@ -74,205 +324,211 @@ export const exportAuditReportToPdf = (
     objective?: string;
     date?: string;
   }
-) => {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  });
+): boolean => {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 16;
-  const contentWidth = pageWidth - margin * 2;
-  let y = margin;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 16;
+    const contentWidth = pageWidth - margin * 2;
+    let y = margin;
 
-  const checkPageBreak = (neededHeight: number) => {
-    if (y + neededHeight > pageHeight - margin - 10) {
-      doc.addPage();
-      y = margin;
-      drawHeaderBanner(true);
-    }
-  };
+    const checkPageBreak = (neededHeight: number) => {
+      if (y + neededHeight > pageHeight - margin - 10) {
+        doc.addPage();
+        y = margin;
+        drawHeaderBanner(true);
+      }
+    };
 
-  const drawHeaderBanner = (isSubsequent = false) => {
-    // Header Bar
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(margin, y, contentWidth, isSubsequent ? 12 : 22, 'F');
+    const drawHeaderBanner = (isSubsequent = false) => {
+      // Header Bar
+      doc.setFillColor(15, 23, 42); // slate-900
+      doc.rect(margin, y, contentWidth, isSubsequent ? 12 : 22, 'F');
 
-    doc.setTextColor(255, 255, 255);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(isSubsequent ? 10 : 13);
+      doc.text('COACHMIND - INFORME DE AUDITORÍA METODOLÓGICA IA', margin + 4, y + (isSubsequent ? 8 : 9));
+
+      if (!isSubsequent) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(203, 213, 225); // slate-300
+        doc.text('Evaluación de Coherencia Táctica y Objetivos de Entrenamiento', margin + 4, y + 16);
+
+        const dateStr = sessionInfo.date || new Date().toLocaleDateString('es-ES');
+        doc.text(`Fecha: ${dateStr}`, pageWidth - margin - 35, y + 16);
+      }
+
+      y += (isSubsequent ? 16 : 28);
+    };
+
+    drawHeaderBanner(false);
+
+    // Session Info Box
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(margin, y, contentWidth, 24, 2, 2, 'FD');
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(isSubsequent ? 10 : 13);
-    doc.text('COACHMIND - INFORME DE AUDITORÍA METODOLÓGICA IA', margin + 4, y + (isSubsequent ? 8 : 9));
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    const truncatedTitle = sessionInfo.title.length > 55 ? sessionInfo.title.slice(0, 52) + '...' : sessionInfo.title;
+    doc.text(`Sesión: ${truncatedTitle}`, margin + 4, y + 7);
 
-    if (!isSubsequent) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+    const details = `Categoría: ${sessionInfo.category || 'Senior'}  |  Nivel: ${sessionInfo.level || 'Estándar'}  |  Intensidad: ${sessionInfo.intensity || 'Media'}`;
+    doc.text(details, margin + 4, y + 14);
+
+    const objText = `Objetivo: ${sessionInfo.objective ? (sessionInfo.objective.length > 80 ? sessionInfo.objective.slice(0, 77) + '...' : sessionInfo.objective) : 'Fundamentos tácticos'}`;
+    doc.text(objText, margin + 4, y + 20);
+
+    y += 30;
+
+    // Alignment Score & Summary Section
+    const isHighAlignment = report.alignmentScore >= 80;
+    doc.setFillColor(isHighAlignment ? 240 : 254, isHighAlignment ? 253 : 243, isHighAlignment ? 244 : 199);
+    doc.setDrawColor(isHighAlignment ? 34 : 217, isHighAlignment ? 197 : 119, isHighAlignment ? 94 : 6);
+    doc.roundedRect(margin, y, contentWidth, 26, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(isHighAlignment ? 21 : 180, isHighAlignment ? 128 : 83, isHighAlignment ? 61 : 9);
+    doc.text(`DIAGNÓSTICO GLOBAL: ${report.alignmentScore}% COHERENCIA METODOLÓGICA`, margin + 4, y + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    const splitSummary = doc.splitTextToSize(report.summary, contentWidth - 8);
+    doc.text(splitSummary, margin + 4, y + 14);
+
+    y += 32;
+
+    // Strengths
+    if (report.strengths && report.strengths.length > 0) {
+      checkPageBreak(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(16, 185, 129); // emerald-600
+      doc.text('PUNTOS FUERTES IDENTIFICADOS POR LA IA', margin, y);
+      y += 5;
+
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
-      doc.setTextColor(203, 213, 225); // slate-300
-      doc.text('Evaluación de Coherencia Táctica y Objetivos de Entrenamiento', margin + 4, y + 16);
+      doc.setTextColor(30, 41, 59);
 
-      const dateStr = sessionInfo.date || new Date().toLocaleDateString('es-ES');
-      doc.text(`Fecha: ${dateStr}`, pageWidth - margin - 35, y + 16);
+      report.strengths.forEach((str) => {
+        checkPageBreak(8);
+        const splitStr = doc.splitTextToSize(`• ${str}`, contentWidth - 4);
+        doc.text(splitStr, margin + 2, y);
+        y += splitStr.length * 4.5 + 1;
+      });
+
+      y += 4;
     }
 
-    y += (isSubsequent ? 16 : 28);
-  };
-
-  drawHeaderBanner(false);
-
-  // Session Info Box
-  doc.setFillColor(248, 250, 252); // slate-50
-  doc.setDrawColor(226, 232, 240); // slate-200
-  doc.roundedRect(margin, y, contentWidth, 24, 2, 2, 'FD');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  const truncatedTitle = sessionInfo.title.length > 55 ? sessionInfo.title.slice(0, 52) + '...' : sessionInfo.title;
-  doc.text(`Sesión: ${truncatedTitle}`, margin + 4, y + 7);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(71, 85, 105);
-  const details = `Categoría: ${sessionInfo.category || 'Senior'}  |  Nivel: ${sessionInfo.level || 'Estándar'}  |  Intensidad: ${sessionInfo.intensity || 'Media'}`;
-  doc.text(details, margin + 4, y + 14);
-
-  const objText = `Objetivo: ${sessionInfo.objective ? (sessionInfo.objective.length > 80 ? sessionInfo.objective.slice(0, 77) + '...' : sessionInfo.objective) : 'Fundamentos tácticos'}`;
-  doc.text(objText, margin + 4, y + 20);
-
-  y += 30;
-
-  // Alignment Score & Summary Section
-  const isHighAlignment = report.alignmentScore >= 80;
-  doc.setFillColor(isHighAlignment ? 240 : 254, isHighAlignment ? 253 : 243, isHighAlignment ? 244 : 199); // light green or light amber
-  doc.setDrawColor(isHighAlignment ? 34 : 217, isHighAlignment ? 197 : 119, isHighAlignment ? 94 : 6);
-  doc.roundedRect(margin, y, contentWidth, 26, 2, 2, 'FD');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(isHighAlignment ? 21 : 180, isHighAlignment ? 128 : 83, isHighAlignment ? 61 : 9);
-  doc.text(`DIAGNÓSTICO GLOBAL: ${report.alignmentScore}% COHERENCIA METODOLÓGICA`, margin + 4, y + 7);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(15, 23, 42);
-  const splitSummary = doc.splitTextToSize(report.summary, contentWidth - 8);
-  doc.text(splitSummary, margin + 4, y + 14);
-
-  y += 32;
-
-  // Strengths
-  if (report.strengths && report.strengths.length > 0) {
-    checkPageBreak(30);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(16, 185, 129); // emerald-600
-    doc.text('PUNTOS FUERTES IDENTIFICADOS POR LA IA', margin, y);
-    y += 5;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(30, 41, 59);
-
-    report.strengths.forEach((str) => {
-      checkPageBreak(8);
-      const splitStr = doc.splitTextToSize(`• ${str}`, contentWidth - 4);
-      doc.text(splitStr, margin + 2, y);
-      y += splitStr.length * 4.5 + 1;
-    });
-
-    y += 4;
-  }
-
-  // Drill-by-Drill Feedback
-  if (report.drillFeedbacks && report.drillFeedbacks.length > 0) {
-    checkPageBreak(25);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(245, 158, 11); // amber-600
-    doc.text('EVALUACIÓN DETALLADA EJERCICIO POR EJERCICIO', margin, y);
-    y += 6;
-
-    report.drillFeedbacks.forEach((fb, idx) => {
-      checkPageBreak(28);
-
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'FD');
-
-      // Title & badge
+    // Drill-by-Drill Feedback
+    if (report.drillFeedbacks && report.drillFeedbacks.length > 0) {
+      checkPageBreak(25);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`${idx + 1}. ${fb.drillTitle}`, margin + 3, y + 5.5);
+      doc.setFontSize(9.5);
+      doc.setTextColor(245, 158, 11); // amber-600
+      doc.text('EVALUACIÓN DETALLADA EJERCICIO POR EJERCICIO', margin, y);
+      y += 6;
 
-      doc.setFontSize(8);
-      if (fb.isAligned) {
-        doc.setTextColor(16, 185, 129);
-        doc.text('[ Alineado con Objetivo ]', pageWidth - margin - 45, y + 5.5);
-      } else {
-        doc.setTextColor(225, 29, 72);
-        doc.text('[ Requiere Ajuste ]', pageWidth - margin - 40, y + 5.5);
-      }
+      report.drillFeedbacks.forEach((fb, idx) => {
+        checkPageBreak(28);
 
-      // Reason
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'FD');
+
+        // Title & badge
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${idx + 1}. ${fb.drillTitle}`, margin + 3, y + 5.5);
+
+        doc.setFontSize(8);
+        if (fb.isAligned) {
+          doc.setTextColor(16, 185, 129);
+          doc.text('[ Alineado con Objetivo ]', pageWidth - margin - 45, y + 5.5);
+        } else {
+          doc.setTextColor(225, 29, 72);
+          doc.text('[ Requiere Ajuste ]', pageWidth - margin - 40, y + 5.5);
+        }
+
+        // Reason
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        const splitReason = doc.splitTextToSize(`Motivo: ${fb.reason}`, contentWidth - 6);
+        doc.text(splitReason.slice(0, 2), margin + 3, y + 11);
+
+        // Suggestion
+        if (fb.suggestion) {
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(180, 83, 9);
+          const splitSug = doc.splitTextToSize(`Consejo IA: ${fb.suggestion}`, contentWidth - 6);
+          doc.text(splitSug[0], margin + 3, y + 17.5);
+        }
+
+        y += 25;
+      });
+
+      y += 2;
+    }
+
+    // Tactical Suggestions
+    if (report.tacticalSuggestions && report.tacticalSuggestions.length > 0) {
+      checkPageBreak(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(37, 99, 235); // blue-600
+      doc.text('RECOMENDACIONES Y SUGERENCIAS TÁCTICAS AVANZADAS', margin, y);
+      y += 5;
+
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(51, 65, 85);
-      const splitReason = doc.splitTextToSize(`Motivo: ${fb.reason}`, contentWidth - 6);
-      doc.text(splitReason.slice(0, 2), margin + 3, y + 11);
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 41, 59);
 
-      // Suggestion
-      if (fb.suggestion) {
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(180, 83, 9);
-        const splitSug = doc.splitTextToSize(`Consejo IA: ${fb.suggestion}`, contentWidth - 6);
-        doc.text(splitSug[0], margin + 3, y + 17.5);
-      }
+      report.tacticalSuggestions.forEach((sug) => {
+        checkPageBreak(8);
+        const splitSug = doc.splitTextToSize(`• ${sug}`, contentWidth - 4);
+        doc.text(splitSug, margin + 2, y);
+        y += splitSug.length * 4.5 + 1;
+      });
 
-      y += 25;
-    });
+      y += 4;
+    }
 
-    y += 2;
+    // Footer on all pages
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+      doc.text('CoachMind Basketball • Sistema Inteligente de Planificación Táctica', margin, pageHeight - 8);
+      doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin - 20, pageHeight - 8);
+    }
+
+    const safeFilename = `Auditoria_IA_CoachMind_${sessionInfo.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    doc.save(safeFilename);
+    return true;
+  } catch (error) {
+    console.error('Error generating Audit PDF with jsPDF:', error);
+    return false;
   }
-
-  // Tactical Suggestions
-  if (report.tacticalSuggestions && report.tacticalSuggestions.length > 0) {
-    checkPageBreak(30);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(37, 99, 235); // blue-600
-    doc.text('RECOMENDACIONES Y SUGERENCIAS TÁCTICAS AVANZADAS', margin, y);
-    y += 5;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(30, 41, 59);
-
-    report.tacticalSuggestions.forEach((sug) => {
-      checkPageBreak(8);
-      const splitSug = doc.splitTextToSize(`• ${sug}`, contentWidth - 4);
-      doc.text(splitSug, margin + 2, y);
-      y += splitSug.length * 4.5 + 1;
-    });
-
-    y += 4;
-  }
-
-  // Footer on all pages
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(148, 163, 184); // slate-400
-    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
-    doc.text('CoachMind Basketball • Sistema Inteligente de Planificación Táctica', margin, pageHeight - 8);
-    doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin - 20, pageHeight - 8);
-  }
-
-  const safeFilename = `Auditoria_IA_CoachMind_${sessionInfo.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
-  doc.save(safeFilename);
 };
 
 /**

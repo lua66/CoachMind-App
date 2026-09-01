@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { SavedTraining, DrillItem } from '../types';
 import {
-  exportElementToPdf,
+  exportTrainingSessionToPdf,
   exportTrainingToDoc,
   exportAuditReportToPdf,
   printAuditReport,
@@ -43,18 +43,18 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
     window.print();
   };
 
-  const handleDownloadPdf = async () => {
-    if (!printRef.current) return;
+  const handleDownloadPdf = () => {
     setIsGeneratingPdf(true);
-    const cleanTitle = training.title.replace(/[^a-zA-Z0-9_-]/g, '_') || 'Sesion';
-    const success = await exportElementToPdf(
-      printRef.current,
-      `Entrenamiento_CoachMind_${cleanTitle}`,
-      setIsGeneratingPdf
-    );
-    if (success) {
-      setIsDownloaded(true);
-      setTimeout(() => setIsDownloaded(false), 3000);
+    try {
+      const success = exportTrainingSessionToPdf(training);
+      if (success) {
+        setIsDownloaded(true);
+        setTimeout(() => setIsDownloaded(false), 3000);
+      }
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 

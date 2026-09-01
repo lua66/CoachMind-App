@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { SavedTraining, TrainingSection, ViewMode, UserProfile } from '../types';
 import { TrainingReportModal } from './TrainingReportModal';
+import { exportTrainingSessionToPdf } from '../utils/pdfExport';
 
 interface TrainingsViewProps {
   trainings: SavedTraining[];
@@ -182,9 +183,9 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
 
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setSelectedTraining(item)}
+                              onClick={() => exportTrainingSessionToPdf(item)}
                               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition-all shadow-sm cursor-pointer"
-                              title="Descargar PDF o imprimir entrenamiento"
+                              title="Descargar archivo PDF completo"
                             >
                               <Download className="w-3.5 h-3.5" />
                               <span>Descargar PDF</span>
