@@ -3,6 +3,7 @@ import {
   Calendar as CalendarIcon,
   Plus,
   Trash2,
+  Pencil,
   Clock,
   MapPin,
   Users,
@@ -24,6 +25,7 @@ import { consumeTrialAction } from '../utils/trialManager';
 interface CalendarViewProps {
   events: CalendarEvent[];
   onAddEvent: (event: CalendarEvent) => void;
+  onUpdateEvent?: (event: CalendarEvent) => void;
   onDeleteEvent: (id: string) => void;
   players?: Player[];
   userProfile?: UserProfile | null;
@@ -33,6 +35,7 @@ interface CalendarViewProps {
 export const CalendarView: React.FC<CalendarViewProps> = ({
   events,
   onAddEvent,
+  onUpdateEvent,
   onDeleteEvent,
   players = [],
   userProfile,
@@ -40,6 +43,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'training' | 'match' | 'friendly' | 'home' | 'away'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null);
 
@@ -85,7 +89,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const startOffset = (firstDayOfWeek + 6) % 7;
 
   const handleDayClick = (date: string) => {
+    setEditingEvent(null);
     setDateStr(date);
+    setTitle('');
+    setOpponent('');
+    setArrivalTime('17:00');
+    setStartTime('18:00');
+    setLocation('');
+    setNotes('');
+    setIsHome(true);
+    setSelectedAbsentPlayers([]);
+    setCustomAbsentText('');
     setIsAddModalOpen(true);
   };
 
@@ -104,8 +118,43 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       if (onOpenTrialModal) onOpenTrialModal('general_action');
       return;
     }
+    setEditingEvent(null);
     setEventType(type);
     if (type === 'friendly') setLeg('pretemporada');
+    else if (type === 'match') setLeg('ida');
+    setTitle('');
+    setOpponent('');
+    setDateStr(new Date().toISOString().split('T')[0]);
+    setArrivalTime('17:00');
+    setStartTime('18:00');
+    setLocation('');
+    setNotes('');
+    setIsHome(true);
+    setSelectedAbsentPlayers([]);
+    setCustomAbsentText('');
+    setIsAddModalOpen(true);
+  };
+
+  const handleOpenEditModal = (ev: CalendarEvent) => {
+    setEditingEvent(ev);
+    setEventType(ev.type || 'match');
+    setTitle(ev.title || '');
+    setDateStr(ev.date || new Date().toISOString().split('T')[0]);
+    setArrivalTime(ev.arrivalTime || '17:00');
+    setStartTime(ev.startTime || '18:00');
+    setLocation(ev.location || '');
+    setNotes(ev.notes || '');
+    setIsHome(ev.isHome !== false);
+    setOpponent(ev.opponent || '');
+    setLeg(ev.leg || (ev.type === 'friendly' ? 'pretemporada' : 'ida'));
+
+    const existingAbsents = ev.absentPlayers || [];
+    const knownPlayerNames = players.map((p) => p.name);
+    const knownSelected = existingAbsents.filter((name) => knownPlayerNames.includes(name));
+    const customSelected = existingAbsents.filter((name) => !knownPlayerNames.includes(name));
+
+    setSelectedAbsentPlayers(knownSelected);
+    setCustomAbsentText(customSelected.join(', '));
     setIsAddModalOpen(true);
   };
 
@@ -120,7 +169,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!consumeTrialAction(userProfile, 'calendar')) {
+    if (!editingEvent && !consumeTrialAction(userProfile, 'calendar')) {
       setIsAddModalOpen(false);
       if (onOpenTrialModal) onOpenTrialModal('general_action');
       return;
@@ -134,25 +183,51 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     const isMatchOrFriendly = eventType === 'match' || eventType === 'friendly';
 
-    const newEvent: CalendarEvent = {
-      id: `ev-${Date.now()}`,
-      title: eventType === 'training' ? (title || 'Entrenamiento de Equipo') : `vs ${opponent || 'Rival'}`,
-      type: eventType,
-      date: dateStr,
-      arrivalTime,
-      startTime,
-      location: location || (isHome ? 'Pabellón Local' : 'Pabellón Visitante'),
-      notes,
-      isHome: isMatchOrFriendly ? isHome : undefined,
-      opponent: isMatchOrFriendly ? opponent : undefined,
-      leg: eventType === 'friendly' ? 'pretemporada' : (isMatchOrFriendly ? leg : undefined),
-      absentPlayers: isMatchOrFriendly ? absentList : undefined,
-    };
+    if (editingEvent) {
+      const updatedEvent: CalendarEvent = {
+        ...editingEvent,
+        title: eventType === 'training' ? (title || 'Entrenamiento de Equipo') : `vs ${opponent || 'Rival'}`,
+        type: eventType,
+        date: dateStr,
+        arrivalTime,
+        startTime,
+        location: location || (isHome ? 'Pabellón Local' : 'Pabellón Visitante'),
+        notes,
+        isHome: isMatchOrFriendly ? isHome : undefined,
+        opponent: isMatchOrFriendly ? opponent : undefined,
+        leg: eventType === 'friendly' ? 'pretemporada' : (isMatchOrFriendly ? leg : undefined),
+        absentPlayers: isMatchOrFriendly ? absentList : undefined,
+      };
 
-    onAddEvent(newEvent);
+      if (onUpdateEvent) {
+        onUpdateEvent(updatedEvent);
+      }
+      if (selectedEvent?.id === editingEvent.id) {
+        setSelectedEvent(updatedEvent);
+      }
+      setEditingEvent(null);
+    } else {
+      const newEvent: CalendarEvent = {
+        id: `ev-${Date.now()}`,
+        title: eventType === 'training' ? (title || 'Entrenamiento de Equipo') : `vs ${opponent || 'Rival'}`,
+        type: eventType,
+        date: dateStr,
+        arrivalTime,
+        startTime,
+        location: location || (isHome ? 'Pabellón Local' : 'Pabellón Visitante'),
+        notes,
+        isHome: isMatchOrFriendly ? isHome : undefined,
+        opponent: isMatchOrFriendly ? opponent : undefined,
+        leg: eventType === 'friendly' ? 'pretemporada' : (isMatchOrFriendly ? leg : undefined),
+        absentPlayers: isMatchOrFriendly ? absentList : undefined,
+      };
+
+      onAddEvent(newEvent);
+    }
+
     setIsAddModalOpen(false);
 
-    // Auto navigate calendar to the month of the newly added event
+    // Auto navigate calendar to the month of the event
     if (dateStr) {
       const parts = dateStr.split('-');
       if (parts.length === 3) {
@@ -164,7 +239,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       }
     }
 
-    // Set filter tab so the user immediately sees their new event
+    // Set filter tab so the user immediately sees their event
     if (eventType === 'friendly') {
       setFilterType('friendly');
     } else if (eventType === 'match') {
@@ -430,16 +505,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           </h4>
                         </div>
 
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEventToDelete(ev);
-                          }}
-                          className="p-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 transition-colors cursor-pointer shrink-0"
-                          title="Eliminar evento"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditModal(ev);
+                            }}
+                            className="p-1.5 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors cursor-pointer"
+                            title="Editar evento"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEventToDelete(ev);
+                            }}
+                            className="p-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 transition-colors cursor-pointer"
+                            title="Eliminar evento"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1">
@@ -499,11 +586,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-5 bg-[#0B132B] text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-amber-400" />
-                <h3 className="font-extrabold text-lg">Añadir Nuevo Evento al Calendario</h3>
+                {editingEvent ? (
+                  <Pencil className="w-5 h-5 text-amber-400" />
+                ) : (
+                  <CalendarDays className="w-5 h-5 text-amber-400" />
+                )}
+                <h3 className="font-extrabold text-lg">
+                  {editingEvent ? 'Editar Evento del Calendario' : 'Añadir Nuevo Evento al Calendario'}
+                </h3>
               </div>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setEditingEvent(null);
+                }}
                 className="text-slate-400 hover:text-white p-1 rounded-lg"
               >
                 ✕
@@ -741,7 +837,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setEditingEvent(null);
+                  }}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer"
                 >
                   Cancelar
@@ -750,7 +849,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   type="submit"
                   className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 cursor-pointer"
                 >
-                  Guardar Evento
+                  {editingEvent ? 'Guardar Cambios' : 'Guardar Evento'}
                 </button>
               </div>
             </form>
@@ -840,14 +939,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 </div>
               )}
 
-              <div className="pt-2 flex items-center justify-between gap-3">
-                <button
-                  onClick={() => setEventToDelete(selectedEvent)}
-                  className="px-4 py-2.5 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Eliminar Evento</span>
-                </button>
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const ev = selectedEvent;
+                      setSelectedEvent(null);
+                      handleOpenEditModal(ev);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    <span>Editar Evento</span>
+                  </button>
+
+                  <button
+                    onClick={() => setEventToDelete(selectedEvent)}
+                    className="px-3.5 py-2.5 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Eliminar</span>
+                  </button>
+                </div>
 
                 <button
                   onClick={() => setSelectedEvent(null)}

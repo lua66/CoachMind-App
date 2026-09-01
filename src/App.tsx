@@ -442,6 +442,12 @@ export default function App() {
     });
   };
 
+  const handleUpdateCalendarEvent = (updatedEvent: CalendarEvent) => {
+    setCalendarEvents((prev) =>
+      prev.map((ev) => (ev.id === updatedEvent.id ? updatedEvent : ev))
+    );
+  };
+
   const handleDeleteCalendarEvent = (id: string) => {
     setCalendarEvents((prev) => prev.filter((ev) => ev.id !== id));
   };
@@ -627,6 +633,7 @@ export default function App() {
           <CalendarView
             events={calendarEvents}
             onAddEvent={handleAddCalendarEvent}
+            onUpdateEvent={handleUpdateCalendarEvent}
             onDeleteEvent={handleDeleteCalendarEvent}
             players={players}
             userProfile={userProfile}
