@@ -12,6 +12,8 @@ import {
   Clock,
   Dumbbell,
   Printer,
+  Download,
+  FileText,
 } from 'lucide-react';
 import { SavedTraining, TrainingSection, ViewMode, UserProfile } from '../types';
 import { TrainingReportModal } from './TrainingReportModal';
@@ -181,10 +183,18 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => setSelectedTraining(item)}
-                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-all shadow-sm"
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition-all shadow-sm cursor-pointer"
+                              title="Descargar PDF o imprimir entrenamiento"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Descargar PDF</span>
+                            </button>
+                            <button
+                              onClick={() => setSelectedTraining(item)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-all shadow-sm cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                              <span>Abrir</span>
+                              <span>Ver</span>
                             </button>
                             <button
                               onClick={() => {

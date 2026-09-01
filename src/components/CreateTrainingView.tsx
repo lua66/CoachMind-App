@@ -21,6 +21,10 @@ import {
   Zap,
   Target,
   RefreshCw,
+  Download,
+  Copy,
+  Eye,
+  FileDown,
 } from 'lucide-react';
 import {
   CategoryType,
@@ -38,6 +42,7 @@ import {
 import { consumeTrialAction } from '../utils/trialManager';
 import { TacticalDrillBoard, TacticalDrillBoardRef } from './TacticalDrillBoard';
 import { TrainingReportModal } from './TrainingReportModal';
+import { exportAuditReportToPdf, printAuditReport } from '../utils/pdfExport';
 
 interface CreateTrainingViewProps {
   onSaveTraining: (training: SavedTraining) => void;
@@ -246,7 +251,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     };
   };
 
-  // Action: Save session and View Full Report / Print PDF
+  // Action: Save session and View Full Report
   const handleSaveAndOpenReport = () => {
     if (!userProfile) {
       if (onOpenTrialModal) onOpenTrialModal('general_action');
@@ -264,6 +269,55 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     setSavedTrainingForModal(trainingToSave);
     setIsSaved(true);
     setShowReportModal(true);
+  };
+
+  const [copiedAudit, setCopiedAudit] = useState(false);
+
+  const handleDownloadAuditPdf = () => {
+    if (!reviewReport) return;
+    exportAuditReportToPdf(reviewReport, {
+      title: title.trim() || 'Sesión de Entrenamiento',
+      category,
+      level,
+      intensity,
+      objective,
+      date: new Date().toLocaleDateString('es-ES'),
+    });
+  };
+
+  const handlePrintAudit = () => {
+    if (!reviewReport) return;
+    printAuditReport(reviewReport, {
+      title: title.trim() || 'Sesión de Entrenamiento',
+      category,
+      level,
+      intensity,
+      objective,
+      date: new Date().toLocaleDateString('es-ES'),
+    });
+  };
+
+  const handleCopyAuditSummary = () => {
+    if (!reviewReport) return;
+    const drillText = reviewReport.drillFeedbacks
+      .map(
+        (fb, idx) =>
+          `${idx + 1}. ${fb.drillTitle}: ${fb.isAligned ? 'Alineado' : 'Ajustar'} - ${fb.reason}${
+            fb.suggestion ? ` (Consejo: ${fb.suggestion})` : ''
+          }`
+      )
+      .join('\n');
+    const fullSummary = `🏀 AUDITORÍA IA - COACHMIND\nSesión: ${title || 'Sin título'} (${category} - ${intensity})\nCoherencia: ${
+      reviewReport.alignmentScore
+    }%\n\nDiagnóstico: ${reviewReport.summary}\n\nEjercicios:\n${drillText}\n\nPuntos Fuertes:\n${reviewReport.strengths
+      .map((s) => `• ${s}`)
+      .join('\n')}\n\nSugerencias Tácticas:\n${reviewReport.tacticalSuggestions
+      .map((s) => `• ${s}`)
+      .join('\n')}`;
+
+    navigator.clipboard.writeText(fullSummary);
+    setCopiedAudit(true);
+    setTimeout(() => setCopiedAudit(false), 2500);
   };
 
   // Action: Audit & Review Coach Drills vs Objective with AI
@@ -841,7 +895,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
               type="button"
               onClick={handleReviewWithAi}
               disabled={isReviewing}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs shadow-lg shadow-orange-500/20 transition-all cursor-pointer disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02] cursor-pointer disabled:opacity-60"
             >
               {isReviewing ? (
                 <>
@@ -860,10 +914,10 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
             <button
               type="button"
               onClick={handleSaveAndOpenReport}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02] cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
-              <span>Guardar Sesión y Ver Informe / PDF</span>
+              <Eye className="w-4 h-4" />
+              <span>Guardar Sesión y Abrir Informe / Descargas</span>
             </button>
           </div>
         </div>
@@ -871,28 +925,65 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
         {/* AI Audit Report Card (Rendered when coach audits with AI) */}
         {reviewReport && (
           <div className="p-6 rounded-2xl bg-slate-950/80 border border-amber-500/30 space-y-6 animate-scaleUp">
-            {/* Score & Summary */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            {/* Score & Summary with Download Actions */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-extrabold text-xs uppercase tracking-wider">
-                    Auditoría de Entrenamiento CoachMind
+                  <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Auditoría Metodológica CoachMind IA
                   </span>
                 </div>
                 <h4 className="text-base font-bold text-slate-100">{reviewReport.summary}</h4>
               </div>
 
-              <div className="flex items-center gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-800 shrink-0">
-                <div className="text-center px-2">
-                  <p className="text-[10px] uppercase font-bold text-slate-400">Coherencia</p>
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                {/* Score badge */}
+                <div className="text-center px-3 py-1.5 bg-slate-900 rounded-xl border border-slate-800">
+                  <p className="text-[9px] uppercase font-bold text-slate-400">Coherencia</p>
                   <p
-                    className={`text-2xl font-black ${
+                    className={`text-xl font-black ${
                       reviewReport.alignmentScore >= 80 ? 'text-emerald-400' : 'text-amber-400'
                     }`}
                   >
                     {reviewReport.alignmentScore}%
                   </p>
                 </div>
+
+                {/* Direct Download Audit PDF */}
+                <button
+                  type="button"
+                  onClick={handleDownloadAuditPdf}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all hover:scale-[1.02] cursor-pointer"
+                  title="Descargar informe de auditoría en formato PDF"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Descargar Auditoría (PDF)</span>
+                </button>
+
+                {/* Print Audit */}
+                <button
+                  type="button"
+                  onClick={handlePrintAudit}
+                  className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  title="Imprimir informe de auditoría"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+
+                {/* Copy Audit */}
+                <button
+                  type="button"
+                  onClick={handleCopyAuditSummary}
+                  className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  title="Copiar resumen al portapapeles"
+                >
+                  {copiedAudit ? (
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
 
