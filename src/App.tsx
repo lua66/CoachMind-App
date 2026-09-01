@@ -342,12 +342,12 @@ export default function App() {
 
   const [players, setPlayers] = useState<Player[]>(() => {
     const local = localStorage.getItem('coachmind_players');
-    if (!local) return INITIAL_PLAYERS;
+    if (!local) return [];
     try {
       const parsed = JSON.parse(local);
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PLAYERS;
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return INITIAL_PLAYERS;
+      return [];
     }
   });
 

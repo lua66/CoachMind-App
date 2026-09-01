@@ -519,63 +519,86 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {effectivePlayers.filter(filterMatchesSearch).map((p) => {
-                  const cfg = ROLE_CONFIG[p.role];
-                  return (
-                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-3">
-                        <span className={`w-8 h-8 rounded-xl ${cfg.colorBg} text-white font-black text-xs flex items-center justify-center shadow-xs`}>
-                          #{p.jerseyNumber}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3 font-extrabold text-slate-900 capitalize">
-                        {p.name}
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${cfg.badgeBg}`}>
-                          {p.role}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3 font-semibold text-slate-600">
-                        {p.heightCm ? `${p.heightCm} cm` : '175 cm'}
-                      </td>
-                      <td className="py-3.5 px-3 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-black text-[11px] ${
-                          (p.attendancePct ?? 95) >= 90
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : (p.attendancePct ?? 95) >= 75
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {p.attendancePct ?? 95}%
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3 font-bold text-slate-700">
-                        {p.stats?.pointsPerGame ?? 0} PPG · {p.stats?.reboundsPerGame ?? 0} RPG
-                      </td>
-                      <td className="py-3.5 px-3 text-right">
-                        <div className="inline-flex items-center gap-1">
+                {effectivePlayers.filter(filterMatchesSearch).length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-10 text-center text-slate-400 font-medium">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Users className="w-8 h-8 text-slate-300 stroke-[1.5]" />
+                        <p className="text-xs font-bold text-slate-600">
+                          {searchTerm ? 'No se encontraron jugadoras con ese criterio' : 'Aún no hay jugadoras registradas en tu plantilla'}
+                        </p>
+                        {!searchTerm && (
                           <button
                             type="button"
-                            onClick={() => handleOpenEditModal(p)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
-                            title="Editar"
+                            onClick={() => handleOpenAddModal('Base')}
+                            className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-black cursor-pointer transition-colors"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Plus className="w-3.5 h-3.5" />
+                            Añadir la primera jugadora
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setPlayerToDelete(p)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  effectivePlayers.filter(filterMatchesSearch).map((p) => {
+                    const cfg = ROLE_CONFIG[p.role];
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-3">
+                          <span className={`w-8 h-8 rounded-xl ${cfg.colorBg} text-white font-black text-xs flex items-center justify-center shadow-xs`}>
+                            #{p.jerseyNumber}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-3 font-extrabold text-slate-900 capitalize">
+                          {p.name}
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${cfg.badgeBg}`}>
+                            {p.role}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-3 font-semibold text-slate-600">
+                          {p.heightCm ? `${p.heightCm} cm` : '175 cm'}
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-black text-[11px] ${
+                            (p.attendancePct ?? 95) >= 90
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : (p.attendancePct ?? 95) >= 75
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {p.attendancePct ?? 95}%
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-3 font-bold text-slate-700">
+                          {p.stats?.pointsPerGame ?? 0} PPG · {p.stats?.reboundsPerGame ?? 0} RPG
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(p)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                              title="Editar"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPlayerToDelete(p)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
