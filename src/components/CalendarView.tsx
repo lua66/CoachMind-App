@@ -18,6 +18,9 @@ import {
   CalendarDays,
   Handshake,
   X,
+  RotateCcw,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 import { CalendarEvent, EventType, MatchLeg, Player, UserProfile } from '../types';
 import { consumeTrialAction } from '../utils/trialManager';
@@ -31,6 +34,18 @@ interface CalendarViewProps {
   userProfile?: UserProfile | null;
   onOpenTrialModal?: (mode?: 'general_action' | 'ficha_entrenador') => void;
 }
+
+const normalizePlayerName = (name: string) =>
+  name.replace(/^#?\d+\s*/, '').trim().toLowerCase();
+
+const isPlayerMarkedAbsent = (playerName: string, absentList: string[]) => {
+  const norm = normalizePlayerName(playerName);
+  return absentList.some(
+    (item) =>
+      normalizePlayerName(item) === norm ||
+      item.trim().toLowerCase() === playerName.trim().toLowerCase()
+  );
+};
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
   events,
@@ -149,9 +164,26 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     setLeg(ev.leg || (ev.type === 'friendly' ? 'pretemporada' : 'ida'));
 
     const existingAbsents = ev.absentPlayers || [];
-    const knownPlayerNames = players.map((p) => p.name);
-    const knownSelected = existingAbsents.filter((name) => knownPlayerNames.includes(name));
-    const customSelected = existingAbsents.filter((name) => !knownPlayerNames.includes(name));
+    const knownSelected: string[] = [];
+    const customSelected: string[] = [];
+
+    existingAbsents.forEach((absentItem) => {
+      const cleanNorm = normalizePlayerName(absentItem);
+      const matched = players.find(
+        (p) =>
+          normalizePlayerName(p.name) === cleanNorm ||
+          p.name.trim().toLowerCase() === absentItem.trim().toLowerCase()
+      );
+      if (matched) {
+        if (!knownSelected.includes(matched.name)) {
+          knownSelected.push(matched.name);
+        }
+      } else {
+        if (absentItem.trim()) {
+          customSelected.push(absentItem.trim());
+        }
+      }
+    });
 
     setSelectedAbsentPlayers(knownSelected);
     setCustomAbsentText(customSelected.join(', '));
@@ -159,10 +191,64 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   const handleToggleAbsentPlayer = (playerName: string) => {
-    if (selectedAbsentPlayers.includes(playerName)) {
-      setSelectedAbsentPlayers(selectedAbsentPlayers.filter((p) => p !== playerName));
-    } else {
-      setSelectedAbsentPlayers([...selectedAbsentPlayers, playerName]);
+    setSelectedAbsentPlayers((prev) => {
+      const isAlready = isPlayerMarkedAbsent(playerName, prev);
+      if (isAlready) {
+        const norm = normalizePlayerName(playerName);
+        return prev.filter(
+          (p) =>
+            normalizePlayerName(p) !== norm &&
+            p.trim().toLowerCase() !== playerName.trim().toLowerCase()
+        );
+      } else {
+        return [...prev, playerName];
+      }
+    });
+  };
+
+  const handleClearAllBajas = () => {
+    setSelectedAbsentPlayers([]);
+    setCustomAbsentText('');
+  };
+
+  const handleRemoveSingleBajaFromEvent = (
+    event: CalendarEvent,
+    playerNameToRemove: string,
+    e?: React.MouseEvent
+  ) => {
+    if (e) e.stopPropagation();
+    const currentBajas = event.absentPlayers || [];
+    const cleanToRemove = normalizePlayerName(playerNameToRemove);
+    const updatedBajas = currentBajas.filter((name) => {
+      const cleanCurrent = normalizePlayerName(name);
+      return cleanCurrent !== cleanToRemove && name.trim() !== playerNameToRemove.trim();
+    });
+
+    const updatedEvent: CalendarEvent = {
+      ...event,
+      absentPlayers: updatedBajas.length > 0 ? updatedBajas : undefined,
+    };
+
+    if (onUpdateEvent) {
+      onUpdateEvent(updatedEvent);
+    }
+    if (selectedEvent?.id === event.id) {
+      setSelectedEvent(updatedEvent);
+    }
+  };
+
+  const handleClearAllBajasFromEvent = (event: CalendarEvent, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updatedEvent: CalendarEvent = {
+      ...event,
+      absentPlayers: undefined,
+    };
+
+    if (onUpdateEvent) {
+      onUpdateEvent(updatedEvent);
+    }
+    if (selectedEvent?.id === event.id) {
+      setSelectedEvent(updatedEvent);
     }
   };
 
@@ -177,11 +263,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     let absentList = [...selectedAbsentPlayers];
     if (customAbsentText.trim()) {
-      const extras = customAbsentText.split(',').map((s) => s.trim()).filter(Boolean);
+      const extras = customAbsentText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       absentList = Array.from(new Set([...absentList, ...extras]));
     }
 
     const isMatchOrFriendly = eventType === 'match' || eventType === 'friendly';
+    const finalAbsentPlayers =
+      isMatchOrFriendly && absentList.length > 0 ? absentList : undefined;
 
     if (editingEvent) {
       const updatedEvent: CalendarEvent = {
@@ -196,7 +287,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         isHome: isMatchOrFriendly ? isHome : undefined,
         opponent: isMatchOrFriendly ? opponent : undefined,
         leg: eventType === 'friendly' ? 'pretemporada' : (isMatchOrFriendly ? leg : undefined),
-        absentPlayers: isMatchOrFriendly ? absentList : undefined,
+        absentPlayers: finalAbsentPlayers,
       };
 
       if (onUpdateEvent) {
@@ -219,7 +310,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         isHome: isMatchOrFriendly ? isHome : undefined,
         opponent: isMatchOrFriendly ? opponent : undefined,
         leg: eventType === 'friendly' ? 'pretemporada' : (isMatchOrFriendly ? leg : undefined),
-        absentPlayers: isMatchOrFriendly ? absentList : undefined,
+        absentPlayers: finalAbsentPlayers,
       };
 
       onAddEvent(newEvent);
@@ -549,18 +640,36 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
                       {/* Absent / Injured players */}
                       {ev.absentPlayers && ev.absentPlayers.length > 0 && (
-                        <div className="p-2.5 rounded-lg bg-red-50 border border-red-100 space-y-1">
-                          <span className="text-[10px] font-extrabold uppercase text-red-700 flex items-center gap-1">
-                            <ShieldAlert className="w-3 h-3 text-red-600" />
-                            Jugadoras Bajas / Lesionadas ({ev.absentPlayers.length}):
-                          </span>
+                        <div className="p-2.5 rounded-xl bg-red-50/90 border border-red-200 space-y-1.5">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-extrabold uppercase text-red-700 flex items-center gap-1">
+                              <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
+                              Jugadoras Bajas ({ev.absentPlayers.length}):
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleClearAllBajasFromEvent(ev, e)}
+                              className="text-[10px] font-bold text-red-700 hover:text-red-900 bg-white/80 hover:bg-white px-2 py-0.5 rounded-md border border-red-200 transition-colors cursor-pointer"
+                              title="Quitar todas las bajas (Juegan todas)"
+                            >
+                              Quitar todas
+                            </button>
+                          </div>
                           <div className="flex flex-wrap gap-1">
                             {ev.absentPlayers.map((p, idx) => (
                               <span
                                 key={idx}
-                                className="px-2 py-0.5 rounded-md bg-red-100 text-red-800 text-[11px] font-bold"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-100/90 text-red-800 text-[11px] font-bold border border-red-200"
                               >
-                                {p}
+                                <span>{p}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleRemoveSingleBajaFromEvent(ev, p, e)}
+                                  className="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-red-200 text-red-700 hover:text-red-900 transition-colors cursor-pointer"
+                                  title={`Quitar a ${p} de bajas`}
+                                >
+                                  ×
+                                </button>
                               </span>
                             ))}
                           </div>
@@ -782,41 +891,88 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
               {/* Absent / Injured Players Section */}
               {(eventType === 'match' || eventType === 'friendly') && (
-                <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <label className="block text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 text-red-600" />
-                    <span>Jugadoras que NO pueden ir (por lesión u otra causa)</span>
-                  </label>
+                <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                        <ShieldAlert className="w-4 h-4 text-red-600" />
+                        <span>Gestión de Bajas / Ausencias del Partido</span>
+                      </label>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Por defecto toda la plantilla está <strong>convocada (🟢)</strong>. Pulsa sobre una jugadora <strong>únicamente si es BAJA (🔴)</strong> por lesión o ausencia.
+                      </p>
+                    </div>
+
+                    {(selectedAbsentPlayers.length > 0 || customAbsentText.trim().length > 0) && (
+                      <button
+                        type="button"
+                        onClick={handleClearAllBajas}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer shrink-0 self-start sm:self-auto"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Quitar todas las bajas (Juegan todas)</span>
+                      </button>
+                    )}
+                  </div>
 
                   {players.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {players.map((p) => {
-                        const isSelected = selectedAbsentPlayers.includes(p.name);
-                        return (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {players.map((p) => {
+                          const isAbsent = isPlayerMarkedAbsent(p.name, selectedAbsentPlayers);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleToggleAbsentPlayer(p.name)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isAbsent
+                                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/20 ring-2 ring-red-400'
+                                  : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/80'
+                              }`}
+                              title={isAbsent ? 'Marcar como disponible / convocada' : 'Marcar como BAJA'}
+                            >
+                              <span className={`w-2 h-2 rounded-full ${isAbsent ? 'bg-white' : 'bg-emerald-500'}`} />
+                              <span>#{p.jerseyNumber} {p.name}</span>
+                              {isAbsent ? (
+                                <span className="ml-0.5 text-[10px] bg-red-800 text-white px-1.5 py-0.5 rounded-md font-extrabold">BAJA ✕</span>
+                              ) : (
+                                <span className="text-[10px] text-emerald-600 font-bold">Juega</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedAbsentPlayers.length > 0 && (
+                        <div className="p-2.5 rounded-xl bg-red-50/90 border border-red-200 flex items-center justify-between text-xs text-red-900">
+                          <span className="font-bold">
+                            🚫 {selectedAbsentPlayers.length} {selectedAbsentPlayers.length === 1 ? 'jugadora marcada como BAJA' : 'jugadoras marcadas como BAJA'} (no juegan).
+                          </span>
                           <button
-                            key={p.id}
                             type="button"
-                            onClick={() => handleToggleAbsentPlayer(p.name)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              isSelected
-                                ? 'bg-red-600 text-white shadow-sm'
-                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                            }`}
+                            onClick={handleClearAllBajas}
+                            className="text-red-700 hover:text-red-950 font-black underline cursor-pointer text-xs"
                           >
-                            #{p.jerseyNumber} {p.name} {isSelected ? '✓' : ''}
+                            Borrar todas las bajas
                           </button>
-                        );
-                      })}
+                        </div>
+                      )}
                     </div>
                   ) : null}
 
-                  <input
-                    type="text"
-                    value={customAbsentText}
-                    onChange={(e) => setCustomAbsentText(e.target.value)}
-                    placeholder="Escribe otros nombres de bajas separados por comas..."
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs mt-1"
-                  />
+                  <div className="pt-1">
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      Otras bajas no registradas en la plantilla (opcional):
+                    </label>
+                    <input
+                      type="text"
+                      value={customAbsentText}
+                      onChange={(e) => setCustomAbsentText(e.target.value)}
+                      placeholder="Escribe otros nombres de bajas separados por comas..."
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -917,15 +1073,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               </div>
 
               {selectedEvent.absentPlayers && selectedEvent.absentPlayers.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-red-50 border border-red-100 space-y-1.5">
-                  <span className="text-xs font-black uppercase text-red-700 flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 text-red-600" />
-                    Jugadoras Bajas / Lesionadas ({selectedEvent.absentPlayers.length}):
-                  </span>
-                  <div className="flex flex-wrap gap-1">
+                <div className="p-3.5 rounded-xl bg-red-50/90 border border-red-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black uppercase text-red-700 flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-red-600" />
+                      Jugadoras Bajas ({selectedEvent.absentPlayers.length}):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleClearAllBajasFromEvent(selectedEvent, e)}
+                      className="text-xs font-bold text-red-700 hover:text-red-950 bg-white hover:bg-red-50 px-2.5 py-1 rounded-lg border border-red-200 transition-colors cursor-pointer"
+                    >
+                      Quitar todas las bajas
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     {selectedEvent.absentPlayers.map((p, idx) => (
-                      <span key={idx} className="px-2 py-0.5 rounded-md bg-red-100 text-red-800 text-xs font-bold">
-                        {p}
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-100 text-red-800 text-xs font-bold border border-red-200"
+                      >
+                        <span>{p}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleRemoveSingleBajaFromEvent(selectedEvent, p, e)}
+                          className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-200 text-red-700 hover:text-red-900 transition-colors cursor-pointer font-black"
+                          title={`Quitar a ${p} de bajas`}
+                        >
+                          ×
+                        </button>
                       </span>
                     ))}
                   </div>
