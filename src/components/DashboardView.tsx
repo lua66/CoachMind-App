@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Trophy,
@@ -18,6 +18,9 @@ import {
   Star,
   ThumbsUp,
   HeartHandshake,
+  Layers,
+  ChevronRight,
+  MessageSquareHeart,
 } from 'lucide-react';
 import {
   ViewMode,
@@ -29,7 +32,8 @@ import {
   CoachPhilosophy,
   AppReview,
 } from '../types';
-import { getStoredReviews } from './ReviewModal';
+import { getStoredReviews, ReviewModal } from './ReviewModal';
+import { AllReviewsModal } from './AllReviewsModal';
 
 interface DashboardViewProps {
   onNavigate: (view: ViewMode) => void;
@@ -63,6 +67,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const firstName = userProfile?.firstName || 'Entrenador';
 
   const [appReviews, setAppReviews] = useState<AppReview[]>(() => getStoredReviews());
+  const [isAllReviewsModalOpen, setIsAllReviewsModalOpen] = useState(false);
+  const [isWriteReviewModalOpen, setIsWriteReviewModalOpen] = useState(false);
 
   useEffect(() => {
     const handleReviewsUpdate = () => {
@@ -73,6 +79,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       window.removeEventListener('coachmind_reviews_updated', handleReviewsUpdate);
     };
   }, []);
+
+  // Mathematical average and distribution calculation
+  const { totalReviews, averageRating, formattedAverage, latestFourReviews } = useMemo(() => {
+    const total = appReviews.length;
+    if (total === 0) {
+      return {
+        totalReviews: 0,
+        averageRating: 5.0,
+        formattedAverage: '5.0',
+        latestFourReviews: [],
+      };
+    }
+
+    const sum = appReviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0);
+    const avg = sum / total;
+    const formatted = avg.toFixed(1);
+
+    // Limit to latest 4 by arrival order
+    const latest = appReviews.slice(0, 4);
+
+    return {
+      totalReviews: total,
+      averageRating: avg,
+      formattedAverage: formatted,
+      latestFourReviews: latest,
+    };
+  }, [appReviews]);
 
   // Count saved plays
   const getTacticalPlaysCount = (): number => {
@@ -325,63 +358,171 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <ThumbsUp className="w-5 h-5 text-amber-500 fill-amber-500" />
             </h2>
             <p className="text-xs text-slate-500">
-              Conoce lo que dicen otros entrenadores de baloncesto sobre CoachMind ({appReviews.length} valoraciones registradas)
+              {totalReviews > 0
+                ? `Mostrando las últimas ${Math.min(4, totalReviews)} de ${totalReviews} valoraciones registradas`
+                : 'Sé el primero en valorar CoachMind'}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2 text-xs font-black text-amber-900">
-              <div className="flex text-amber-400">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} className="w-4 h-4 fill-amber-400" />
-                ))}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Botón Contador de Reseñas y Media Matemática */}
+            <button
+              type="button"
+              onClick={() => setIsAllReviewsModalOpen(true)}
+              className="p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200/90 flex items-center gap-2.5 text-xs font-black text-amber-950 transition-all shadow-sm cursor-pointer group"
+              title="Haz clic para ver el desglose completo de valoraciones"
+            >
+              {/* Estrellas Proporcionales de la Media Matemática */}
+              <div className="flex text-amber-400 gap-0.5">
+                {[1, 2, 3, 4, 5].map((starIndex) => {
+                  const fillPct = Math.max(
+                    0,
+                    Math.min(100, (averageRating - (starIndex - 1)) * 100)
+                  );
+                  return (
+                    <div key={starIndex} className="relative w-4 h-4 text-slate-300">
+                      <Star className="w-4 h-4 fill-slate-200 text-slate-200" />
+                      <div
+                        className="absolute top-0 left-0 overflow-hidden text-amber-400"
+                        style={{ width: `${fillPct}%` }}
+                      >
+                        <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <span>5.0 / 5.0</span>
-            </div>
+
+              {/* Media y Contador total */}
+              <div className="flex items-center gap-1.5 pl-1 border-l border-amber-300/60">
+                <span className="font-extrabold text-slate-900">{formattedAverage}</span>
+                <span className="text-slate-400 text-[11px]">/ 5.0</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-amber-200/70 text-amber-900 text-[11px] font-black">
+                  {totalReviews} {totalReviews === 1 ? 'reseña' : 'reseñas'}
+                </span>
+              </div>
+            </button>
+
+            {/* Botón para Dejar Valoración */}
+            <button
+              type="button"
+              onClick={() => setIsWriteReviewModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-200" />
+              <span>Valorar App</span>
+            </button>
           </div>
         </div>
 
-        {/* Grid of Reviews */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {appReviews.map((rev) => (
-            <div
-              key={rev.id}
-              className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3 relative hover:border-amber-300 transition-all shadow-sm"
+        {/* Grid de Reseñas: Estrictamente las últimas 4 por orden de llegada */}
+        {latestFourReviews.length === 0 ? (
+          <div className="text-center py-10 space-y-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <MessageSquareHeart className="w-8 h-8 text-amber-500 mx-auto" />
+            <p className="text-sm font-bold text-slate-700">Aún no hay reseñas registradas</p>
+            <button
+              type="button"
+              onClick={() => setIsWriteReviewModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs cursor-pointer hover:bg-amber-400"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-slate-950 font-black text-sm flex items-center justify-center shadow-md">
-                    {rev.authorName.charAt(0).toUpperCase()}
+              Sé el primero en valorar
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {latestFourReviews.map((rev) => (
+              <div
+                key={rev.id}
+                className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3 relative hover:border-amber-300 transition-all shadow-sm flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-slate-950 font-black text-sm flex items-center justify-center shadow-md shrink-0">
+                        {rev.authorName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-slate-900">{rev.authorName}</h4>
+                        <p className="text-[11px] font-semibold text-amber-600">
+                          {rev.club || 'Club Baloncesto'} •{' '}
+                          <span className="text-slate-500">{rev.role || 'Entrenador'}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex text-amber-400 shrink-0">
+                      {Array.from({ length: rev.rating || 5 }).map((_, i) => (
+                        <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-slate-900">{rev.authorName}</h4>
-                    <p className="text-[11px] font-semibold text-amber-600">
-                      {rev.club} • <span className="text-slate-500">{rev.role}</span>
-                    </p>
-                  </div>
+
+                  <p className="text-xs text-slate-700 italic leading-relaxed pt-1">
+                    "{rev.comment}"
+                  </p>
                 </div>
 
-                <div className="flex text-amber-400 shrink-0">
-                  {Array.from({ length: rev.rating || 5 }).map((_, i) => (
-                    <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
-                  ))}
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-200/50">
+                  <span>Fecha: {rev.createdAt}</span>
+                  <span className="flex items-center gap-1 font-bold text-amber-600">
+                    <ThumbsUp className="w-3 h-3 fill-amber-500 text-amber-500" /> Like Verificado
+                  </span>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
 
-              <p className="text-xs text-slate-700 italic leading-relaxed pt-1">
-                "{rev.comment}"
-              </p>
+        {/* Footer del panel de reseñas: Botón Ver Más Reseñas y Estado */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-slate-100">
+          <div className="text-xs text-slate-500 text-center sm:text-left">
+            {totalReviews > 4 ? (
+              <span>
+                Mostrando las <strong>4 reseñas más recientes</strong> por orden de llegada. Las anteriores se guardan en el historial completo.
+              </span>
+            ) : (
+              <span>
+                Todas las valoraciones de los entrenadores se conservan y calculan en la media global.
+              </span>
+            )}
+          </div>
 
-              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/50">
-                <span>Fecha: {rev.createdAt}</span>
-                <span className="flex items-center gap-1 font-bold text-amber-600">
-                  <ThumbsUp className="w-3 h-3 fill-amber-500 text-amber-500" /> Like Verificado
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setIsAllReviewsModalOpen(true)}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer group"
+            >
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span>Ver más reseñas</span>
+              {totalReviews > 4 && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px]">
+                  +{totalReviews - 4} más
                 </span>
-              </div>
-            </div>
-          ))}
+              )}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Modal con Todas las Reseñas y Estadísticas Completas */}
+      <AllReviewsModal
+        isOpen={isAllReviewsModalOpen}
+        onClose={() => setIsAllReviewsModalOpen(false)}
+        reviews={appReviews}
+        onOpenWriteReview={() => setIsWriteReviewModalOpen(true)}
+      />
+
+      {/* Modal para que el usuario escriba una reseña */}
+      <ReviewModal
+        isOpen={isWriteReviewModalOpen}
+        onClose={() => setIsWriteReviewModalOpen(false)}
+        userProfile={userProfile}
+        onReviewSubmitted={(updated) => {
+          setAppReviews(updated);
+        }}
+      />
     </div>
   );
 };
