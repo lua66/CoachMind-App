@@ -523,7 +523,12 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
                   Técnica individual y colectiva
                 </option>
                 <option value="Táctica de equipo">Táctica de equipo</option>
-                <option value="Otros entrenamientos">Otros entrenamientos</option>
+                <option value="Entrenamientos Temporada Fase 1">
+                  Entrenamientos Temporada Fase 1
+                </option>
+                <option value="Entrenamientos Temporada Fase 2">
+                  Entrenamientos Temporada Fase 2
+                </option>
               </select>
             </div>
 

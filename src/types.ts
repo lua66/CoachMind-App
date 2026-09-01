@@ -88,6 +88,8 @@ export type TrainingSection =
   | 'Ejercicios de pretemporada'
   | 'Técnica individual y colectiva'
   | 'Táctica de equipo'
+  | 'Entrenamientos Temporada Fase 1'
+  | 'Entrenamientos Temporada Fase 2'
   | 'Otros entrenamientos';
 
 export interface TacticalDiagramElement {

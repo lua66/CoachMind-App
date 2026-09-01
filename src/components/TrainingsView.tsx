@@ -15,6 +15,8 @@ import {
   Download,
   FileText,
   Loader2,
+  Layers,
+  Trophy,
 } from 'lucide-react';
 import { SavedTraining, TrainingSection, ViewMode, UserProfile } from '../types';
 import { TrainingReportModal } from './TrainingReportModal';
@@ -79,11 +81,18 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
       iconBg: 'bg-indigo-600 text-white shadow-indigo-600/20',
     },
     {
-      id: 'Otros entrenamientos',
-      title: 'Otros entrenamientos',
-      subtitle: 'Guardados sin clasificar',
-      icon: Calendar,
-      iconBg: 'bg-slate-700 text-white shadow-slate-700/20',
+      id: 'Entrenamientos Temporada Fase 1',
+      title: 'Entrenamientos Temporada Fase 1',
+      subtitle: 'Planificación, dinámicas y competición del 1er tramo',
+      icon: Layers,
+      iconBg: 'bg-emerald-600 text-white shadow-emerald-600/20',
+    },
+    {
+      id: 'Entrenamientos Temporada Fase 2',
+      title: 'Entrenamientos Temporada Fase 2',
+      subtitle: 'Fase decisiva, ajustes tácticos y playoffs',
+      icon: Trophy,
+      iconBg: 'bg-purple-600 text-white shadow-purple-600/20',
     },
   ];
 
@@ -126,7 +135,11 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
       <div className="space-y-4">
         {sections.map((sec) => {
           const Icon = sec.icon;
-          const sectionTrainings = trainings.filter((t) => t.section === sec.id);
+          const sectionTrainings = trainings.filter(
+            (t) =>
+              t.section === sec.id ||
+              (sec.id === 'Entrenamientos Temporada Fase 1' && (t.section as any) === 'Otros entrenamientos')
+          );
           const isExpanded = expandedSection === sec.id;
 
           return (
