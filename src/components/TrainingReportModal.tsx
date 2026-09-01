@@ -43,10 +43,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
     window.print();
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     setIsGeneratingPdf(true);
     try {
-      const success = exportTrainingSessionToPdf(training);
+      const success = await exportTrainingSessionToPdf(training);
       if (success) {
         setIsDownloaded(true);
         setTimeout(() => setIsDownloaded(false), 3000);
@@ -58,8 +58,12 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
     }
   };
 
-  const handleDownloadDoc = () => {
-    exportTrainingToDoc(training);
+  const handleDownloadDoc = async () => {
+    try {
+      await exportTrainingToDoc(training);
+    } catch (err) {
+      console.error('Error generating Doc:', err);
+    }
   };
 
   const handleDownloadAuditPdf = () => {

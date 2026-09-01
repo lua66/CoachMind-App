@@ -14,6 +14,7 @@ import {
   Printer,
   Download,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { SavedTraining, TrainingSection, ViewMode, UserProfile } from '../types';
 import { TrainingReportModal } from './TrainingReportModal';
@@ -36,6 +37,18 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
 }) => {
   const [expandedSection, setExpandedSection] = useState<TrainingSection | null>(null);
   const [selectedTraining, setSelectedTraining] = useState<SavedTraining | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownloadPdf = async (training: SavedTraining) => {
+    setDownloadingId(training.id);
+    try {
+      await exportTrainingSessionToPdf(training);
+    } catch (err) {
+      console.error('Error downloading training PDF:', err);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const sections: {
     id: TrainingSection;
@@ -183,12 +196,22 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
 
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => exportTrainingSessionToPdf(item)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition-all shadow-sm cursor-pointer"
+                              onClick={() => handleDownloadPdf(item)}
+                              disabled={downloadingId === item.id}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition-all shadow-sm cursor-pointer disabled:opacity-60"
                               title="Descargar archivo PDF completo"
                             >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Descargar PDF</span>
+                              {downloadingId === item.id ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Descargando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Descargar PDF</span>
+                                </>
+                              )}
                             </button>
                             <button
                               onClick={() => setSelectedTraining(item)}

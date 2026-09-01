@@ -1,11 +1,233 @@
 import jsPDF from 'jspdf';
-import { SavedTraining, DrillItem, TrainingReviewReport } from '../types';
+import { SavedTraining, DrillItem, TrainingReviewReport, TacticalDiagramElement } from '../types';
+
+/**
+ * Creates a clean, self-contained SVG string representing the basketball court and all tactical elements.
+ */
+function createDrillSvgString(drill: DrillItem): string {
+  const courtType = drill.courtType || 'half';
+  const elements = drill.diagramElements || [];
+
+  // Check if diagramDataUrl is already an SVG data URL with real tokens
+  if (drill.diagramDataUrl && drill.diagramDataUrl.startsWith('data:image/svg+xml')) {
+    try {
+      const decoded = decodeURIComponent(drill.diagramDataUrl.split(',')[1]);
+      if (decoded && decoded.includes('<svg') && decoded.includes('</svg>')) {
+        return decoded;
+      }
+    } catch {
+      // fallback to generated SVG
+    }
+  }
+
+  let linesSvg = '';
+  let tokensSvg = '';
+
+  elements.forEach((el) => {
+    if (el.type === 'line' && el.points && el.points.length >= 2) {
+      const p1 = el.points[0];
+      const p2 = el.points[1];
+      const color = el.color || '#ffffff';
+
+      if (el.lineStyle === 'screen') {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const angle = Math.atan2(dy, dx);
+        const half = 2.25;
+        const b1x = p2.x + half * Math.cos(angle + Math.PI / 2);
+        const b1y = p2.y + half * Math.sin(angle + Math.PI / 2);
+        const b2x = p2.x + half * Math.cos(angle - Math.PI / 2);
+        const b2y = p2.y + half * Math.sin(angle - Math.PI / 2);
+
+        linesSvg += `
+          <line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${color}" stroke-width="1.6" />
+          <line x1="${b1x}" y1="${b1y}" x2="${b2x}" y2="${b2y}" stroke="${color}" stroke-width="2.6" />
+        `;
+      } else if (el.lineStyle === 'dribble') {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const numSteps = Math.max(3, Math.floor(len / 3.5));
+        const nx = -dy / (len || 1);
+        const ny = dx / (len || 1);
+        let pathD = `M ${p1.x} ${p1.y}`;
+        for (let i = 1; i < numSteps; i++) {
+          const t = i / numSteps;
+          const side = i % 2 === 1 ? 1 : -1;
+          pathD += ` L ${p1.x + dx * t + nx * 1.5 * side} ${p1.y + dy * t + ny * 1.5 * side}`;
+        }
+        pathD += ` L ${p2.x} ${p2.y}`;
+
+        const angle = Math.atan2(dy, dx);
+        const a1x = p2.x + 3.2 * Math.cos(angle + Math.PI - 0.45);
+        const a1y = p2.y + 3.2 * Math.sin(angle + Math.PI - 0.45);
+        const a2x = p2.x + 3.2 * Math.cos(angle + Math.PI + 0.45);
+        const a2y = p2.y + 3.2 * Math.sin(angle + Math.PI + 0.45);
+
+        linesSvg += `
+          <path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.6" />
+          <polygon points="${p2.x},${p2.y} ${a1x},${a1y} ${a2x},${a2y}" fill="${color}" />
+        `;
+      } else {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const angle = Math.atan2(dy, dx);
+        const a1x = p2.x + 3.2 * Math.cos(angle + Math.PI - 0.45);
+        const a1y = p2.y + 3.2 * Math.sin(angle + Math.PI - 0.45);
+        const a2x = p2.x + 3.2 * Math.cos(angle + Math.PI + 0.45);
+        const a2y = p2.y + 3.2 * Math.sin(angle + Math.PI + 0.45);
+
+        const isDashed = el.lineStyle === 'pass';
+        const isDotted = el.lineStyle === 'shot';
+        const dashAttr = isDashed ? 'stroke-dasharray="2.5,1.5"' : isDotted ? 'stroke-dasharray="1,1.2"' : '';
+
+        linesSvg += `
+          <line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${color}" stroke-width="1.6" ${dashAttr} />
+          <polygon points="${p2.x},${p2.y} ${a1x},${a1y} ${a2x},${a2y}" fill="${color}" />
+        `;
+      }
+    } else if (el.type === 'player_offense') {
+      tokensSvg += `
+        <g transform="translate(${el.x}, ${el.y})">
+          <circle r="3.4" fill="#ea580c" stroke="#ffffff" stroke-width="0.6" />
+          <text text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="3.4" font-weight="bold" font-family="system-ui, sans-serif">${el.number || '1'}</text>
+        </g>
+      `;
+    } else if (el.type === 'player_defense') {
+      tokensSvg += `
+        <g transform="translate(${el.x}, ${el.y})">
+          <circle r="3.4" fill="#2563eb" stroke="#ffffff" stroke-width="0.6" />
+          <text text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="3.4" font-weight="bold" font-family="system-ui, sans-serif">${el.number || 'X'}</text>
+        </g>
+      `;
+    } else if (el.type === 'ball') {
+      tokensSvg += `
+        <g transform="translate(${el.x}, ${el.y})">
+          <circle r="2.6" fill="#f97316" stroke="#000000" stroke-width="0.4" />
+          <line x1="-2.4" y1="0" x2="2.4" y2="0" stroke="#000000" stroke-width="0.3" />
+          <path d="M -1.8 -1.8 A 2.4 2.4 0 0 1 1.8 1.8" stroke="#000000" stroke-width="0.3" fill="none" />
+        </g>
+      `;
+    } else if (el.type === 'cone') {
+      tokensSvg += `
+        <g transform="translate(${el.x}, ${el.y})">
+          <polygon points="0,-2.8 2.6,2.4 -2.6,2.4" fill="#eab308" stroke="#713f12" stroke-width="0.4" />
+          <line x1="-1.8" y1="0.6" x2="1.8" y2="0.6" stroke="#ffffff" stroke-width="0.4" />
+        </g>
+      `;
+    } else if (el.type === 'text') {
+      const label = el.label || 'Nota';
+      tokensSvg += `
+        <g transform="translate(${el.x}, ${el.y})">
+          <rect x="-10" y="-3.5" width="20" height="7" rx="1.5" fill="rgba(15,23,42,0.9)" stroke="#475569" stroke-width="0.5" />
+          <text text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="2.4" font-weight="bold" font-family="system-ui, sans-serif">${label}</text>
+        </g>
+      `;
+    }
+  });
+
+  const courtSvg =
+    courtType === 'half'
+      ? `
+    <g stroke="rgba(255,255,255,0.75)" stroke-width="0.65" fill="none">
+      <rect x="4" y="4" width="92" height="92" rx="1" />
+      <rect x="36" y="4" width="28" height="38" fill="rgba(255,255,255,0.03)" />
+      <circle cx="50" cy="42" r="11" />
+      <line x1="39" y1="42" x2="61" y2="42" stroke-dasharray="1.2,1.2" />
+      <path d="M 12 4 L 12 18 A 38 38 0 0 0 88 18 L 88 4" />
+      <path d="M 44 14 A 6 6 0 0 0 56 14" />
+      <line x1="42" y1="9" x2="58" y2="9" stroke-width="1.2" stroke="white" />
+      <line x1="50" y1="9" x2="50" y2="12" stroke-width="0.8" stroke="white" />
+      <circle cx="50" cy="13" r="2.2" stroke="#ea580c" stroke-width="1" fill="none" />
+      <path d="M 39 96 A 11 11 0 0 1 61 96" />
+    </g>
+  `
+      : `
+    <g stroke="rgba(255,255,255,0.75)" stroke-width="0.65" fill="none">
+      <rect x="4" y="4" width="92" height="92" rx="1" />
+      <line x1="4" y1="50" x2="96" y2="50" stroke-width="0.8" />
+      <circle cx="50" cy="50" r="9" />
+      <rect x="37" y="4" width="26" height="22" fill="rgba(255,255,255,0.03)" />
+      <circle cx="50" cy="26" r="8" />
+      <path d="M 14 4 L 14 12 A 36 36 0 0 0 86 12 L 86 4" />
+      <line x1="43" y1="8" x2="57" y2="8" stroke-width="1" stroke="white" />
+      <circle cx="50" cy="11" r="2" stroke="#ea580c" stroke-width="0.9" fill="none" />
+      <rect x="37" y="74" width="26" height="22" fill="rgba(255,255,255,0.03)" />
+      <circle cx="50" cy="74" r="8" />
+      <path d="M 14 96 L 14 88 A 36 36 0 0 1 86 88 L 86 96" />
+      <line x1="43" y1="92" x2="57" y2="92" stroke-width="1" stroke="white" />
+      <circle cx="50" cy="89" r="2" stroke="#ea580c" stroke-width="0.9" fill="none" />
+    </g>
+  `;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="800" height="500">
+    <rect width="100" height="100" fill="#0d281e" />
+    ${courtSvg}
+    ${linesSvg}
+    ${tokensSvg}
+  </svg>`;
+}
+
+/**
+ * Converts a DrillItem's diagram into a high-resolution PNG Data URL.
+ */
+export const renderDrillDiagramToPng = async (drill: DrillItem): Promise<string> => {
+  if (drill.diagramDataUrl && drill.diagramDataUrl.startsWith('data:image/png;base64,')) {
+    return drill.diagramDataUrl;
+  }
+
+  const svgString = createDrillSvgString(drill);
+  const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    const fallbackCanvas = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 500;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#0d281e';
+        ctx.fillRect(0, 0, 800, 500);
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(32, 20, 736, 460);
+      }
+      resolve(canvas.toDataURL('image/png'));
+    };
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 500;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          fallbackCanvas();
+          return;
+        }
+        ctx.drawImage(img, 0, 0, 800, 500);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        fallbackCanvas();
+      }
+    };
+
+    img.onerror = () => {
+      fallbackCanvas();
+    };
+
+    img.src = svgDataUrl;
+  });
+};
 
 /**
  * Native, bulletproof PDF Generator for Full Training Sessions using jsPDF.
- * Generates sharp, vector-quality multi-page PDF documents and immediately triggers file download.
+ * Embeds high-resolution tactical boards for every drill.
  */
-export const exportTrainingSessionToPdf = (training: SavedTraining): boolean => {
+export const exportTrainingSessionToPdf = async (training: SavedTraining): Promise<boolean> => {
   try {
     const doc = new jsPDF({
       orientation: 'portrait',
@@ -15,7 +237,7 @@ export const exportTrainingSessionToPdf = (training: SavedTraining): boolean => 
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 16;
+    const margin = 14;
     const contentWidth = pageWidth - margin * 2;
     let y = margin;
 
@@ -28,266 +250,264 @@ export const exportTrainingSessionToPdf = (training: SavedTraining): boolean => 
     };
 
     const drawPageHeader = () => {
-      // Top header banner
       doc.setFillColor(15, 23, 42); // slate-900
-      doc.rect(margin, y, contentWidth, 14, 'F');
+      doc.rect(margin, y, contentWidth, 12, 'F');
 
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text('COACHMIND - SESIÓN DE ENTRENAMIENTO DE BALONCESTO', margin + 4, y + 9);
+      doc.setFontSize(10);
+      doc.text('COACHMIND - SESIÓN DE ENTRENAMIENTO DE BALONCESTO', margin + 4, y + 8);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(251, 146, 60); // orange-400
       const dateStr = training.createdAt || new Date().toLocaleDateString('es-ES');
-      doc.text(dateStr, pageWidth - margin - 25, y + 9);
+      doc.text(dateStr, pageWidth - margin - 25, y + 8);
 
-      y += 18;
+      y += 16;
     };
 
-    // First Page Initial Header
+    // First Page Header
     doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(margin, y, contentWidth, 24, 'F');
+    doc.rect(margin, y, contentWidth, 22, 'F');
 
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('COACHMIND BALONCESTO', margin + 4, y + 9);
+    doc.setFontSize(13);
+    doc.text('COACHMIND BALONCESTO', margin + 4, y + 8.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(203, 213, 225); // slate-300
-    doc.text('Planificación Táctica Oficial y Metodología Deportiva', margin + 4, y + 16);
+    doc.text('Planificación Táctica Oficial y Metodología Deportiva', margin + 4, y + 15.5);
 
     const dateStr = training.createdAt || new Date().toLocaleDateString('es-ES');
     doc.setTextColor(251, 146, 60); // orange-400
     doc.setFont('helvetica', 'bold');
-    doc.text(`Fecha: ${dateStr}`, pageWidth - margin - 35, y + 16);
+    doc.text(`Fecha: ${dateStr}`, pageWidth - margin - 35, y + 15.5);
 
-    y += 28;
+    y += 26;
 
     // Session Title & Core Meta Box
     doc.setFillColor(248, 250, 252); // slate-50
     doc.setDrawColor(226, 232, 240); // slate-200
-    doc.roundedRect(margin, y, contentWidth, 26, 2, 2, 'FD');
+    doc.roundedRect(margin, y, contentWidth, 24, 2, 2, 'FD');
 
     // Title
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
+    doc.setFontSize(12);
     doc.setTextColor(15, 23, 42); // slate-900
     const titleText = training.title.length > 55 ? training.title.slice(0, 52) + '...' : training.title;
-    doc.text(titleText, margin + 4, y + 8);
+    doc.text(titleText, margin + 4, y + 7.5);
 
     // Meta row
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(71, 85, 105); // slate-600
-    const totalTime =
-      training.plan?.totalDuration ||
-      training.durationMinutes ||
-      60;
+    const totalTime = training.plan?.totalDuration || training.durationMinutes || 60;
     const metaLine1 = `Sección: ${training.section || 'General'}  |  Categoría: ${training.category || 'Senior'} (${training.ageRange || 'Libre'})  |  Nivel: ${training.level || 'Estándar'}`;
-    doc.text(metaLine1, margin + 4, y + 15);
+    doc.text(metaLine1, margin + 4, y + 14);
 
-    const metaLine2 = `Intensidad: ${training.intensity || 'Media'}  |  Duración Total: ${totalTime} minutos  |  Ejercicios: ${training.exerciseCount || (training.plan?.mainDrills?.length || 0) + (training.plan?.warmup?.length || 0) + (training.plan?.cooldown?.length || 0)}`;
-    doc.text(metaLine2, margin + 4, y + 21);
+    const metaLine2 = `Intensidad: ${training.intensity || 'Media'}  |  Duración Total: ${totalTime} min  |  Ejercicios: ${training.exerciseCount || (training.plan?.mainDrills?.length || 0) + (training.plan?.warmup?.length || 0) + (training.plan?.cooldown?.length || 0)}`;
+    doc.text(metaLine2, margin + 4, y + 19.5);
 
-    y += 31;
+    y += 28;
 
     // Objective Box
     if (training.objective) {
-      checkPageBreak(25);
+      checkPageBreak(22);
       doc.setFillColor(255, 247, 237); // orange-50
       doc.setDrawColor(249, 115, 22); // orange-500
-      doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'FD');
+      doc.roundedRect(margin, y, contentWidth, 16, 2, 2, 'FD');
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setTextColor(194, 65, 12); // orange-700
-      doc.text('OBJETIVO PRINCIPAL DE LA SESIÓN:', margin + 4, y + 6);
+      doc.text('OBJETIVO PRINCIPAL DE LA SESIÓN:', margin + 4, y + 5.5);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(30, 41, 59);
       const splitObj = doc.splitTextToSize(training.objective, contentWidth - 8);
-      doc.text(splitObj.slice(0, 2), margin + 4, y + 12);
+      doc.text(splitObj.slice(0, 2), margin + 4, y + 11);
 
-      y += 22;
+      y += 20;
     }
 
     // AI Review Report Summary if attached
     if (training.plan?.reviewReport) {
       const review = training.plan.reviewReport;
-      checkPageBreak(28);
+      checkPageBreak(24);
 
       const isHigh = review.alignmentScore >= 80;
       doc.setFillColor(15, 23, 42); // slate-900
       doc.setDrawColor(30, 41, 59);
-      doc.roundedRect(margin, y, contentWidth, 24, 2, 2, 'FD');
+      doc.roundedRect(margin, y, contentWidth, 20, 2, 2, 'FD');
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(9);
       doc.setTextColor(251, 191, 36); // amber-400
-      doc.text('AUDITORÍA METODOLÓGICA IA', margin + 4, y + 6.5);
+      doc.text('AUDITORÍA METODOLÓGICA IA', margin + 4, y + 6);
 
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(isHigh ? 52 : 251, isHigh ? 211 : 191, isHigh ? 153 : 36);
-      doc.text(`Coherencia Táctica: ${review.alignmentScore}%`, pageWidth - margin - 45, y + 6.5);
+      doc.text(`Coherencia: ${review.alignmentScore}%`, pageWidth - margin - 35, y + 6);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setTextColor(226, 232, 240);
       const splitSummary = doc.splitTextToSize(review.summary, contentWidth - 8);
-      doc.text(splitSummary.slice(0, 2), margin + 4, y + 13);
+      doc.text(splitSummary.slice(0, 2), margin + 4, y + 12);
 
-      y += 28;
+      y += 24;
     }
 
-    // Helper for rendering drills
-    const renderDrillSection = (
-      sectionTitle: string,
-      drills: DrillItem[],
-      colorTheme: { headerBg: [number, number, number]; accent: [number, number, number] }
-    ) => {
-      if (!drills || drills.length === 0) return;
+    // Pre-render all drill diagrams as PNG Data URLs in parallel
+    const allDrillSections: { title: string; drills: DrillItem[]; color: [number, number, number] }[] = [];
+    if (training.plan?.warmup && training.plan.warmup.length > 0) {
+      allDrillSections.push({ title: '1. Fase de Calentamiento / Activación', drills: training.plan.warmup, color: [234, 88, 12] });
+    }
+    if (training.plan?.mainDrills && training.plan.mainDrills.length > 0) {
+      allDrillSections.push({ title: '2. Fase Principal / Ejercicios Tácticos', drills: training.plan.mainDrills, color: [37, 99, 235] });
+    }
+    if (training.plan?.cooldown && training.plan.cooldown.length > 0) {
+      allDrillSections.push({ title: '3. Fase Final / Vuelta a la Calma', drills: training.plan.cooldown, color: [5, 150, 105] });
+    }
 
-      checkPageBreak(20);
+    // Render drill sections with Tactical Boards
+    for (const section of allDrillSections) {
+      checkPageBreak(18);
 
       // Section Title Banner
-      doc.setFillColor(...colorTheme.headerBg);
-      doc.roundedRect(margin, y, contentWidth, 8, 1.5, 1.5, 'F');
+      doc.setFillColor(...section.color);
+      doc.roundedRect(margin, y, contentWidth, 7, 1.5, 1.5, 'F');
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(9);
       doc.setTextColor(255, 255, 255);
-      doc.text(sectionTitle.toUpperCase(), margin + 4, y + 5.5);
+      doc.text(section.title.toUpperCase(), margin + 4, y + 5);
 
-      y += 11;
+      y += 10;
 
-      drills.forEach((drill, idx) => {
-        checkPageBreak(35);
+      for (let idx = 0; idx < section.drills.length; idx++) {
+        const drill = section.drills[idx];
+        const diagramPng = await renderDrillDiagramToPng(drill);
 
-        // Drill Box
+        // Calculate heights
+        const leftWidth = 106; // text width
+        const boardWidth = 66; // tactical board width in mm
+        const boardHeight = 41.25; // 16:10 aspect ratio (66 * 5/8)
+
+        const splitDesc = drill.description ? doc.splitTextToSize(drill.description, leftWidth - 6) : [];
+        const hasTips = drill.coachingTips && drill.coachingTips.length > 0;
+        const tipsLineCount = hasTips ? Math.min(drill.coachingTips.length, 3) : 0;
+        const textContentHeight = Math.min(splitDesc.length * 3.8, 25) + (hasTips ? tipsLineCount * 3.8 + 8 : 0);
+
+        const cardBodyHeight = Math.max(boardHeight + 6, textContentHeight + 8);
+        const totalCardHeight = 10 + cardBodyHeight;
+
+        checkPageBreak(totalCardHeight + 4);
+
+        const cardStartY = y;
+
+        // Card Container
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(226, 232, 240);
-        
-        const drillBoxStartY = y;
-        let drillBoxHeight = 32;
+        doc.roundedRect(margin, cardStartY, contentWidth, totalCardHeight, 2, 2, 'FD');
 
-        // Calculate needed height for description and tips
-        const splitDesc = drill.description ? doc.splitTextToSize(drill.description, contentWidth - 10) : [];
-        const hasTips = drill.coachingTips && drill.coachingTips.length > 0;
-        const tipsHeight = hasTips ? Math.min(drill.coachingTips.length * 4.5 + 8, 20) : 0;
-        const descHeight = Math.min(splitDesc.length * 4, 25);
-        
-        drillBoxHeight = 14 + descHeight + tipsHeight + 4;
-
-        doc.roundedRect(margin, drillBoxStartY, contentWidth, drillBoxHeight, 2, 2, 'FD');
-
-        // Drill Header inside box
+        // Card Header Bar
         doc.setFillColor(248, 250, 252);
-        doc.roundedRect(margin, drillBoxStartY, contentWidth, 8, 2, 2, 'F');
-        doc.rect(margin, drillBoxStartY + 6, contentWidth, 2, 'F');
+        doc.roundedRect(margin, cardStartY, contentWidth, 8, 2, 2, 'F');
+        doc.rect(margin, cardStartY + 6, contentWidth, 2, 'F');
 
+        // Title
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9.5);
+        doc.setFontSize(9);
         doc.setTextColor(15, 23, 42);
-        const drillHeader = `${idx + 1}. ${drill.title}`;
-        doc.text(drillHeader, margin + 4, drillBoxStartY + 5.5);
+        const drillTitle = `${idx + 1}. ${drill.title}`;
+        doc.text(drillTitle.length > 45 ? drillTitle.slice(0, 42) + '...' : drillTitle, margin + 4, cardStartY + 5.5);
 
-        // Time & Players on the right
-        doc.setFontSize(8);
+        // Meta (time & players)
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
         doc.setTextColor(100, 116, 139);
-        const drillMeta = `${drill.durationMinutes} min  |  ${drill.playersCount || 'Equipo'}`;
-        doc.text(drillMeta, pageWidth - margin - 40, drillBoxStartY + 5.5);
+        const drillMeta = `${drill.durationMinutes} min  |  ${drill.playersCount || 'Plantilla'}`;
+        doc.text(drillMeta, pageWidth - margin - 35, cardStartY + 5.5);
 
-        let curY = drillBoxStartY + 12;
+        let curTextY = cardStartY + 12;
 
-        // Description
+        // Description (Left Column)
         if (splitDesc.length > 0) {
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8);
+          doc.setFontSize(7.5);
           doc.setTextColor(51, 65, 85);
-          doc.text(splitDesc.slice(0, 5), margin + 4, curY);
-          curY += Math.min(splitDesc.length * 4, 20) + 2;
+          doc.text(splitDesc.slice(0, 5), margin + 4, curTextY);
+          curTextY += Math.min(splitDesc.length * 3.8, 18) + 2;
         }
 
-        // Coaching Tips
+        // Coaching Tips (Left Column)
         if (hasTips) {
+          const tipsBoxH = tipsLineCount * 3.8 + 6;
           doc.setFillColor(239, 246, 255); // blue-50
           doc.setDrawColor(191, 219, 254);
-          const boxH = Math.min(drill.coachingTips.length * 4.5 + 4, 18);
-          doc.roundedRect(margin + 3, curY, contentWidth - 6, boxH, 1.5, 1.5, 'FD');
+          doc.roundedRect(margin + 3, curTextY, leftWidth - 6, tipsBoxH, 1.5, 1.5, 'FD');
 
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(7.5);
+          doc.setFontSize(7);
           doc.setTextColor(29, 78, 216); // blue-700
-          doc.text('Claves de Corrección:', margin + 6, curY + 4);
+          doc.text('Claves de Corrección:', margin + 5, curTextY + 3.8);
 
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7.5);
+          doc.setFontSize(7);
           doc.setTextColor(30, 41, 59);
 
           drill.coachingTips.slice(0, 3).forEach((tip, tIdx) => {
-            const tipText = `• ${tip.length > 80 ? tip.slice(0, 77) + '...' : tip}`;
-            doc.text(tipText, margin + 6, curY + 8 + tIdx * 4);
+            const tipText = `• ${tip.length > 60 ? tip.slice(0, 57) + '...' : tip}`;
+            doc.text(tipText, margin + 5, curTextY + 7.5 + tIdx * 3.6);
           });
-
-          curY += boxH + 2;
         }
 
-        y += drillBoxHeight + 4;
-      });
+        // Tactical Board Image (Right Column)
+        const boardX = margin + leftWidth + 4;
+        const boardY = cardStartY + 11;
+
+        try {
+          doc.addImage(diagramPng, 'PNG', boardX, boardY, boardWidth, boardHeight);
+          // Subtle frame around tactical board
+          doc.setDrawColor(51, 65, 85);
+          doc.setLineWidth(0.3);
+          doc.roundedRect(boardX, boardY, boardWidth, boardHeight, 1, 1, 'D');
+        } catch (imgErr) {
+          console.warn('Could not add drill diagram image to PDF:', imgErr);
+        }
+
+        y += totalCardHeight + 4;
+      }
 
       y += 2;
-    };
-
-    // 1. Warmup
-    if (training.plan?.warmup && training.plan.warmup.length > 0) {
-      renderDrillSection('1. Fase de Calentamiento / Activación', training.plan.warmup, {
-        headerBg: [234, 88, 12], // orange-600
-        accent: [249, 115, 22],
-      });
-    }
-
-    // 2. Main Drills
-    if (training.plan?.mainDrills && training.plan.mainDrills.length > 0) {
-      renderDrillSection('2. Fase Principal / Ejercicios Tácticos', training.plan.mainDrills, {
-        headerBg: [37, 99, 235], // blue-600
-        accent: [59, 130, 246],
-      });
-    }
-
-    // 3. Cooldown
-    if (training.plan?.cooldown && training.plan.cooldown.length > 0) {
-      renderDrillSection('3. Fase Final / Vuelta a la Calma', training.plan.cooldown, {
-        headerBg: [5, 150, 105], // emerald-600
-        accent: [16, 185, 129],
-      });
     }
 
     // Coach Tactical Notes
     if (training.plan?.coachNotes && training.plan.coachNotes.length > 0) {
-      checkPageBreak(25);
+      checkPageBreak(22);
       doc.setFillColor(241, 245, 249); // slate-100
       doc.setDrawColor(203, 213, 225);
-      doc.roundedRect(margin, y, contentWidth, 20, 2, 2, 'FD');
+      doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'FD');
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(15, 23, 42);
-      doc.text('NOTAS Y RECORDATORIOS DEL ENTRENADOR', margin + 4, y + 6);
+      doc.text('NOTAS Y RECORDATORIOS DEL ENTRENADOR', margin + 4, y + 5.5);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
+      doc.setFontSize(7);
       doc.setTextColor(51, 65, 85);
 
       training.plan.coachNotes.slice(0, 3).forEach((note, nIdx) => {
-        doc.text(`• ${note}`, margin + 4, y + 11 + nIdx * 4);
+        doc.text(`• ${note}`, margin + 4, y + 10 + nIdx * 3.8);
       });
 
-      y += 24;
+      y += 22;
     }
 
     // Add footer on all pages
@@ -295,10 +515,10 @@ export const exportTrainingSessionToPdf = (training: SavedTraining): boolean => 
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
+      doc.setFontSize(7);
       doc.setTextColor(148, 163, 184); // slate-400
       doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
-      doc.text('CoachMind Basketball • Sistema Inteligente de Planificación', margin, pageHeight - 6);
+      doc.text('CoachMind Basketball • Sistema Inteligente de Planificación Táctica', margin, pageHeight - 6);
       doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin - 22, pageHeight - 6);
     }
 
@@ -347,7 +567,6 @@ export const exportAuditReportToPdf = (
     };
 
     const drawHeaderBanner = (isSubsequent = false) => {
-      // Header Bar
       doc.setFillColor(15, 23, 42); // slate-900
       doc.rect(margin, y, contentWidth, isSubsequent ? 12 : 22, 'F');
 
@@ -366,7 +585,7 @@ export const exportAuditReportToPdf = (
         doc.text(`Fecha: ${dateStr}`, pageWidth - margin - 35, y + 16);
       }
 
-      y += (isSubsequent ? 16 : 28);
+      y += isSubsequent ? 16 : 28;
     };
 
     drawHeaderBanner(false);
@@ -532,87 +751,110 @@ export const exportAuditReportToPdf = (
 };
 
 /**
- * Exports full training session as a Word document (.doc)
+ * Exports full training session as a Word document (.doc) with embedded Tactical Board images.
  */
-export const exportTrainingToDoc = (training: SavedTraining) => {
-  const allDrills = [
-    ...(training.plan?.warmup || []),
-    ...(training.plan?.mainDrills || []),
-    ...(training.plan?.cooldown || []),
-  ];
+export const exportTrainingToDoc = async (training: SavedTraining): Promise<boolean> => {
+  try {
+    const allDrills = [
+      ...(training.plan?.warmup || []),
+      ...(training.plan?.mainDrills || []),
+      ...(training.plan?.cooldown || []),
+    ];
 
-  let drillsHtml = '';
-  allDrills.forEach((drill, idx) => {
-    drillsHtml += `
-      <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
-        <h3 style="color: #ea580c; margin-top: 0;">${idx + 1}. ${drill.title} (${drill.durationMinutes} min)</h3>
-        <p><strong>Jugadores/Espacio:</strong> ${drill.playersCount || 'Plantilla completa'}</p>
-        <p><strong>Descripción:</strong><br/>${drill.description ? drill.description.replace(/\n/g, '<br/>') : 'Sin descripción'}</p>
-        ${
-          drill.coachingTips && drill.coachingTips.length > 0
-            ? `<div style="background-color: #eff6ff; padding: 10px; border-left: 4px solid #3b82f6; margin-top: 10px;">
-                <strong>Claves de Corrección:</strong>
-                <ul>${drill.coachingTips.map((tip) => `<li>${tip}</li>`).join('')}</ul>
-               </div>`
-            : ''
-        }
-      </div>
+    let drillsHtml = '';
+    for (let idx = 0; idx < allDrills.length; idx++) {
+      const drill = allDrills[idx];
+      const diagramPng = await renderDrillDiagramToPng(drill);
+
+      drillsHtml += `
+        <div style="margin-bottom: 24px; padding: 16px; border: 1px solid #cbd5e1; border-radius: 10px; background-color: #ffffff; page-break-inside: avoid;">
+          <table style="width: 100%; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px;">
+            <tr>
+              <td style="font-size: 16px; font-weight: bold; color: #0f172a;">${idx + 1}. ${drill.title}</td>
+              <td style="text-align: right; font-size: 13px; color: #ea580c; font-weight: bold;">⏱ ${drill.durationMinutes} min &nbsp;|&nbsp; 👥 ${drill.playersCount || 'Plantilla completa'}</td>
+            </tr>
+          </table>
+
+          <div style="margin-bottom: 12px;">
+            <strong style="font-size: 12px; color: #475569; text-transform: uppercase;">Descripción y Funcionamiento:</strong>
+            <p style="margin-top: 4px; font-size: 13px; line-height: 1.5; color: #1e293b;">${drill.description ? drill.description.replace(/\n/g, '<br/>') : 'Sin descripción'}</p>
+          </div>
+
+          ${
+            drill.coachingTips && drill.coachingTips.length > 0
+              ? `<div style="background-color: #eff6ff; padding: 12px; border-left: 4px solid #3b82f6; border-radius: 6px; margin-bottom: 16px;">
+                  <strong style="font-size: 12px; color: #1d4ed8; text-transform: uppercase;">Claves de Corrección del Entrenador:</strong>
+                  <ul style="margin: 6px 0 0 16px; padding: 0; font-size: 12px; color: #1e293b;">${drill.coachingTips.map((tip) => `<li style="margin-bottom: 3px;">${tip}</li>`).join('')}</ul>
+                 </div>`
+              : ''
+          }
+
+          <div style="margin-top: 12px; text-align: center; background-color: #0f172a; padding: 12px; border-radius: 8px;">
+            <div style="font-size: 11px; font-weight: bold; color: #fb923c; margin-bottom: 6px; text-align: left; text-transform: uppercase;">📋 Pizarra Táctica:</div>
+            <img src="${diagramPng}" width="460" height="288" style="display: block; margin: 0 auto; border-radius: 6px; border: 1px solid #475569;" alt="Pizarra táctica de ${drill.title}" />
+          </div>
+        </div>
+      `;
+    }
+
+    const auditHtml = training.plan?.reviewReport
+      ? `
+        <div style="background-color: #0f172a; color: #ffffff; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+          <h3 style="color: #fbbf24; margin-top: 0;">Auditoría Metodológica IA (${training.plan.reviewReport.alignmentScore}% Coherencia)</h3>
+          <p style="color: #cbd5e1; font-size: 13px;">${training.plan.reviewReport.summary}</p>
+        </div>
+      `
+      : '';
+
+    const fullHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${training.title} - CoachMind</title>
+        <style>
+          body { font-family: Calibri, Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 20px; }
+          h1 { color: #0f172a; border-bottom: 2px solid #ea580c; padding-bottom: 8px; }
+          .meta-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; }
+          .obj-box { background: #fff7ed; border-left: 4px solid #ea580c; padding: 12px; margin-bottom: 20px; font-size: 13px; }
+        </style>
+      </head>
+      <body>
+        <h1>🏀 COACHMIND - ${training.title}</h1>
+        <div class="meta-box">
+          <strong>Sección:</strong> ${training.section} | 
+          <strong>Categoría:</strong> ${training.category} | 
+          <strong>Nivel:</strong> ${training.level} | 
+          <strong>Intensidad:</strong> ${training.intensity} | 
+          <strong>Duración:</strong> ${training.durationMinutes} min
+        </div>
+        <div class="obj-box">
+          <strong>Objetivo Principal:</strong><br/>
+          ${training.objective || 'Desarrollo técnico y táctico'}
+        </div>
+        ${auditHtml}
+        <h2>Desglose Detallado de Ejercicios y Pizarras (${allDrills.length})</h2>
+        ${drillsHtml}
+        <hr/>
+        <p style="font-size: 11px; color: #94a3b8; text-align: center;">CoachMind Basketball © ${new Date().getFullYear()} • Documento Oficial de Entrenamiento</p>
+      </body>
+      </html>
     `;
-  });
 
-  const auditHtml = training.plan?.reviewReport
-    ? `
-      <div style="background-color: #0f172a; color: #ffffff; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
-        <h3 style="color: #fbbf24; margin-top: 0;">Auditoría Metodológica IA (${training.plan.reviewReport.alignmentScore}% Coherencia)</h3>
-        <p style="color: #cbd5e1;">${training.plan.reviewReport.summary}</p>
-      </div>
-    `
-    : '';
-
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>${training.title} - CoachMind</title>
-      <style>
-        body { font-family: Calibri, Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 20px; }
-        h1 { color: #0f172a; border-bottom: 2px solid #ea580c; padding-bottom: 8px; }
-        .meta-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; margin-bottom: 20px; }
-        .obj-box { background: #fff7ed; border-left: 4px solid #ea580c; padding: 12px; margin-bottom: 20px; }
-      </style>
-    </head>
-    <body>
-      <h1>🏀 COACHMIND - ${training.title}</h1>
-      <div class="meta-box">
-        <strong>Sección:</strong> ${training.section} | 
-        <strong>Categoría:</strong> ${training.category} | 
-        <strong>Nivel:</strong> ${training.level} | 
-        <strong>Intensidad:</strong> ${training.intensity} | 
-        <strong>Duración:</strong> ${training.durationMinutes} min
-      </div>
-      <div class="obj-box">
-        <strong>Objetivo Principal:</strong><br/>
-        ${training.objective || 'Desarrollo técnico y táctico'}
-      </div>
-      ${auditHtml}
-      <h2>Ejercicios de la Sesión (${allDrills.length})</h2>
-      ${drillsHtml}
-      <hr/>
-      <p style="font-size: 11px; color: #94a3b8; text-align: center;">CoachMind Basketball © ${new Date().getFullYear()} • Documento Oficial de Entrenamiento</p>
-    </body>
-    </html>
-  `;
-
-  const blob = new Blob(['\ufeff' + fullHtml], { type: 'application/msword;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `Entrenamiento_CoachMind_${training.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.doc`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+    const blob = new Blob(['\ufeff' + fullHtml], { type: 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Entrenamiento_CoachMind_${training.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (error) {
+    console.error('Error exporting to Doc:', error);
+    return false;
+  }
 };
 
 /**
