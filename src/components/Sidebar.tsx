@@ -148,6 +148,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="font-extrabold text-lg text-white tracking-tight">CoachMind</h1>
+              <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-black tracking-wide">
+                Beta-v1
+              </span>
             </div>
             <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
               BASKETBALL

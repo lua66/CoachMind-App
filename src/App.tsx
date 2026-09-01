@@ -564,7 +564,12 @@ export default function App() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-white font-bold shrink-0">
               <Dumbbell className="w-4 h-4" />
             </div>
-            <span className="font-black text-base tracking-tight">CoachMind</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-black text-base tracking-tight">CoachMind</span>
+              <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[9px] font-black tracking-wide">
+                Beta-v1
+              </span>
+            </div>
           </div>
         </div>
 
