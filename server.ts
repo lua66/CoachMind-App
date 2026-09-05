@@ -8,6 +8,7 @@ import { db } from './src/db/index.ts';
 import { users, players as dbPlayers, philosophies, drills as dbDrills, matches as dbMatches } from './src/db/schema.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { eq } from 'drizzle-orm';
+import * as cheerio from 'cheerio';
 
 dotenv.config();
 
@@ -1491,6 +1492,326 @@ app.post('/api/activation-codes/validate', (req, res) => {
     nextExpectedCode,
     credits: creditsGranted,
   });
+});
+
+// Endpoint de Scraping para actas digitales / estadísticas de partidos (FCBQ, FEB, etc.)
+app.post('/api/scrape-match', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Por favor, introduce una URL válida que comience con http:// o https://',
+      });
+    }
+
+    const targetUrl = url.trim();
+
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'es-ES,es;q=0.9,ca;q=0.8,en;q=0.7',
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(400).json({
+        success: false,
+        error: `No se pudo acceder a la página web (Error HTTP ${response.status}). Comprueba que el enlace esté disponible públicamente.`,
+      });
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    let matchNumber = '1';
+    let localTeam = '';
+    let visitorTeam = '';
+    let scoreLocal = '';
+    let scoreVisitor = '';
+    const extractedPlayers: Array<{
+      id: string;
+      dorsal: string;
+      name: string;
+      team: 'local' | 'visitante';
+      tl: number;
+      t2: number;
+      t3: number;
+    }> = [];
+
+    // 1. Extraer número de jornada / partido
+    const fullText = $('body').text();
+    const jornadaMatch = fullText.match(/jornada\s*#?\s*(\d+)/i) || targetUrl.match(/jornada[=/_-]?(\d+)/i);
+    if (jornadaMatch && jornadaMatch[1]) {
+      matchNumber = jornadaMatch[1];
+    }
+
+    // 2. Extraer equipos y marcador
+    // Buscar en selectores comunes de FCBQ y plataformas de basket
+    const localCandidates = [
+      $('.partit-local, .equip-local, .local-team, .team-local, .equipo-local').first().text().trim(),
+      $('.team-name.local, .club-local, .home-team').first().text().trim(),
+      $('h1, h2, h3').filter((_, el) => $(el).text().includes(' vs ') || $(el).text().includes(' - ')).first().text().trim(),
+    ].filter(Boolean);
+
+    const visitorCandidates = [
+      $('.partit-visitant, .equip-visitant, .visitor-team, .team-visitor, .visitant-team, .equipo-visitante').first().text().trim(),
+      $('.team-name.visitor, .club-visitant, .away-team').first().text().trim(),
+    ].filter(Boolean);
+
+    if (localCandidates.length > 0 && localCandidates[0]) {
+      const txt = localCandidates[0];
+      if (txt.includes(' vs ') || txt.includes(' VS ')) {
+        const parts = txt.split(/ vs /i);
+        localTeam = parts[0]?.trim() || '';
+        visitorTeam = parts[1]?.trim() || '';
+      } else if (txt.includes(' - ')) {
+        const parts = txt.split(' - ');
+        localTeam = parts[0]?.trim() || '';
+        visitorTeam = parts[1]?.trim() || '';
+      } else {
+        localTeam = txt;
+      }
+    }
+
+    if (visitorCandidates.length > 0 && visitorCandidates[0] && !visitorTeam) {
+      visitorTeam = visitorCandidates[0];
+    }
+
+    // Marcador
+    const scoreTextCandidates = [
+      $('.resultat, .score, .marcador, .partit-resultat, .final-score').first().text().trim(),
+      $('.punts-local').first().text().trim() + ' - ' + $('.punts-visitant').first().text().trim(),
+    ].filter((s) => s && s.length > 2);
+
+    for (const sc of scoreTextCandidates) {
+      const match = sc.match(/(\d{1,3})\s*[-–:]\s*(\d{1,3})/);
+      if (match) {
+        scoreLocal = match[1];
+        scoreVisitor = match[2];
+        break;
+      }
+    }
+
+    // 3. Extraer tablas de estadísticas de jugadoras
+    // Recorrer todas las tablas
+    $('table').each((tableIdx, tableEl) => {
+      const table = $(tableEl);
+      const rows = table.find('tr');
+      if (rows.length < 2) return;
+
+      // Determinar si esta tabla corresponde a Local o Visitante
+      let tableTeam: 'local' | 'visitante' = tableIdx === 0 ? 'local' : 'visitante';
+      const surroundingText = (
+        table.prev('h1, h2, h3, h4, h5, .title, .equip, .team').text() +
+        ' ' +
+        table.attr('class') +
+        ' ' +
+        table.attr('id')
+      ).toLowerCase();
+
+      if (
+        surroundingText.includes('visit') ||
+        surroundingText.includes('away') ||
+        (visitorTeam && surroundingText.includes(visitorTeam.toLowerCase()))
+      ) {
+        tableTeam = 'visitante';
+      } else if (
+        surroundingText.includes('local') ||
+        surroundingText.includes('home') ||
+        (localTeam && surroundingText.includes(localTeam.toLowerCase()))
+      ) {
+        tableTeam = 'local';
+      }
+
+      // Analizar cabeceras de columnas
+      let headerCols: string[] = [];
+      const ths = table.find('thead th, thead td, tr:first-child th, tr:first-child td');
+      ths.each((_, th) => {
+        headerCols.push($(th).text().trim().toLowerCase());
+      });
+
+      let dorsalIdx = -1;
+      let nameIdx = -1;
+      let tlIdx = -1;
+      let t2Idx = -1;
+      let t3Idx = -1;
+      let ptsIdx = -1;
+
+      headerCols.forEach((col, idx) => {
+        if (col.includes('dorsal') || col === '#' || col === 'num' || col === 'núm' || col === 'no') {
+          dorsalIdx = idx;
+        } else if (
+          col.includes('nom') ||
+          col.includes('nombre') ||
+          col.includes('jugador') ||
+          col.includes('player')
+        ) {
+          nameIdx = idx;
+        } else if (col === 'tl' || col.includes('t.l') || col.includes('lliures') || col.includes('libres') || col === '1p') {
+          tlIdx = idx;
+        } else if (col === 't2' || col.includes('t.2') || col.includes('2p') || col.includes('tiros de 2')) {
+          t2Idx = idx;
+        } else if (col === 't3' || col.includes('t.3') || col.includes('3p') || col.includes('triples') || col.includes('triple')) {
+          t3Idx = idx;
+        } else if (col === 'pts' || col === 'punts' || col === 'puntos' || col === 'pt') {
+          ptsIdx = idx;
+        }
+      });
+
+      // Si no hay cabeceras claras, asumir estructura típica [Dorsal, Nombre, Min, TL, T2, T3, Pts]
+      if (nameIdx === -1 && rows.find('td').length > 0) {
+        dorsalIdx = 0;
+        nameIdx = 1;
+      }
+
+      // Parsear filas de jugadoras
+      rows.each((rowIdx, rowEl) => {
+        if (rowIdx === 0 && ths.length > 0) return; // Saltar cabecera
+        const tds = $(rowEl).find('td');
+        if (tds.length < 2) return;
+
+        const getColVal = (idx: number) => {
+          if (idx < 0 || idx >= tds.length) return '';
+          return $(tds[idx]).text().trim();
+        };
+
+        const dorsal = dorsalIdx >= 0 ? getColVal(dorsalIdx).replace(/[^\d]/g, '') : '';
+        const name = nameIdx >= 0 ? getColVal(nameIdx) : '';
+
+        // Filtrar filas de totales o vacías
+        const nameLower = name.toLowerCase();
+        if (
+          !name ||
+          nameLower.includes('total') ||
+          nameLower.includes('equip') ||
+          nameLower.includes('equipo') ||
+          nameLower.includes('bancada')
+        ) {
+          return;
+        }
+
+        const parseStatNumber = (str: string): number => {
+          if (!str) return 0;
+          // Si viene en formato "5/8" o "5-8" (anotados/intentados), coger el primer número (anotados)
+          const slashMatch = str.match(/^(\d+)\s*[\/\-]/);
+          if (slashMatch) return parseInt(slashMatch[1], 10) || 0;
+          const clean = str.replace(/[^\d]/g, '');
+          return parseInt(clean, 10) || 0;
+        };
+
+        let tl = tlIdx >= 0 ? parseStatNumber(getColVal(tlIdx)) : 0;
+        let t2 = t2Idx >= 0 ? parseStatNumber(getColVal(t2Idx)) : 0;
+        let t3 = t3Idx >= 0 ? parseStatNumber(getColVal(t3Idx)) : 0;
+        const pts = ptsIdx >= 0 ? parseStatNumber(getColVal(ptsIdx)) : 0;
+
+        // Si tenemos puntos totales y triples pero no T2/TL desglosados, deducir de forma coherente
+        if (pts > 0 && tl === 0 && t2 === 0 && t3 === 0) {
+          // Asumir que la mayoría son tiros de 2
+          t2 = Math.floor(pts / 2);
+          tl = pts % 2;
+        } else if (pts > 0 && (t2 === 0 && tl === 0) && t3 > 0) {
+          const rem = pts - t3 * 3;
+          if (rem > 0) {
+            t2 = Math.floor(rem / 2);
+            tl = rem % 2;
+          }
+        }
+
+        extractedPlayers.push({
+          id: `scraped_${Date.now()}_${tableIdx}_${rowIdx}`,
+          dorsal: dorsal || (rowIdx).toString(),
+          name: name,
+          team: tableTeam,
+          tl,
+          t2,
+          t3,
+        });
+      });
+    });
+
+    // 4. Si no se encontraron tablas pero hay eventos de Play-by-Play en la página
+    if (extractedPlayers.length === 0) {
+      // Buscar jugadas de texto (p.ej. "Triple de Núria Bosch", "Canasta de 2 de Marta Rius")
+      const eventItems = $('.jugada, .accio, .action, .play, li, tr').filter((_, el) => {
+        const t = $(el).text().toLowerCase();
+        return t.includes('triple') || t.includes('canasta') || t.includes('tiro libre') || t.includes('anota');
+      });
+
+      if (eventItems.length > 0) {
+        const playerMap = new Map<string, { dorsal: string; name: string; team: 'local' | 'visitante'; tl: number; t2: number; t3: number }>();
+
+        eventItems.each((_, el) => {
+          const text = $(el).text().trim();
+          const tLower = text.toLowerCase();
+
+          // Detectar equipo
+          let isVisitor = tLower.includes('visit') || (visitorTeam && tLower.includes(visitorTeam.toLowerCase()));
+          const teamType: 'local' | 'visitante' = isVisitor ? 'visitante' : 'local';
+
+          // Extraer dorsal o nombre
+          const dorsalMatch = text.match(/#(\d+)/);
+          const dorsal = dorsalMatch ? dorsalMatch[1] : '';
+
+          // Intentar extraer nombre
+          const nameMatch = text.match(/(?:de|jugador|jugadora)\s+([A-ZÁÉÍÓÚÀÈÒÑ][a-záéíóúàèòñ]+(?:\s+[A-ZÁÉÍÓÚÀÈÒÑ][a-záéíóúàèòñ]+)*)/);
+          const pName = nameMatch ? nameMatch[1] : (dorsal ? `Jugadora #${dorsal}` : 'Jugadora');
+
+          const pKey = `${teamType}_${dorsal || pName}`;
+          if (!playerMap.has(pKey)) {
+            playerMap.set(pKey, {
+              dorsal,
+              name: pName,
+              team: teamType,
+              tl: 0,
+              t2: 0,
+              t3: 0,
+            });
+          }
+
+          const entry = playerMap.get(pKey)!;
+          if (tLower.includes('triple') || tLower.includes('3 pt') || tLower.includes('3pt')) {
+            entry.t3 += 1;
+          } else if (tLower.includes('tiro libre') || tLower.includes('tl')) {
+            entry.tl += 1;
+          } else if (tLower.includes('canasta') || tLower.includes('2 pt') || tLower.includes('2pt') || tLower.includes('anota')) {
+            entry.t2 += 1;
+          }
+        });
+
+        playerMap.forEach((val, idx) => {
+          extractedPlayers.push({
+            id: `p_pbp_${Date.now()}_${idx}`,
+            ...val,
+          });
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      url: targetUrl,
+      matchNumber: matchNumber || '1',
+      localTeam: localTeam || 'Equipo Local',
+      visitorTeam: visitorTeam || 'Equipo Visitante',
+      scoreLocal: scoreLocal || '',
+      scoreVisitor: scoreVisitor || '',
+      playersCount: extractedPlayers.length,
+      players: extractedPlayers,
+      message:
+        extractedPlayers.length > 0
+          ? `¡Scraping completado con éxito! Se han extraído ${extractedPlayers.length} jugadoras con sus estadísticas.`
+          : 'Se ha analizado la página, pero no se han detectado tablas estándar de estadísticas en este enlace.',
+    });
+  } catch (error: any) {
+    console.error('Error en /api/scrape-match:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Error interno al procesar el scraping del partido.',
+    });
+  }
 });
 
 // Serve frontend assets or integrate Vite middleware
