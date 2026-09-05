@@ -21,6 +21,7 @@ import {
   Timer,
 } from 'lucide-react';
 import { ViewMode, UserProfile } from '../types';
+import { InstallAppButton } from './InstallAppButton';
 
 interface SidebarProps {
   currentView: ViewMode;
@@ -225,6 +226,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </nav>
+
+      {/* Button: Instalar / Descargar App */}
+      <div className="px-3 pb-1">
+        <InstallAppButton variant="sidebar" />
+      </div>
 
       {/* Footer Account / Modo Invitado Panel */}
       <div className="p-3.5 m-3 rounded-xl bg-slate-900/90 border border-slate-800/80 space-y-2">

@@ -20,6 +20,8 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { InstallAppButton } from './InstallAppButton';
+import { Tablet, Download } from 'lucide-react';
 
 interface SettingsViewProps {
   userProfile?: UserProfile | null;
@@ -120,9 +122,42 @@ Hola, te contacto a través de CoachMind con estos datos para que puedas saber q
             Configuración
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            Atención al entrenador y solicitudes de entrevista por WhatsApp
+            Descarga de la aplicación y atención al entrenador
           </p>
         </div>
+      </div>
+
+      {/* CARD: Descargar / Instalar CoachMind en iPad / Tablet / Móvil */}
+      <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/90 shadow-md space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md shrink-0">
+            <Tablet className="w-5 h-5 stroke-[2.5]" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                Instalar CoachMind como App (iPad, Tablet o Móvil)
+              </h2>
+              <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-black uppercase">
+                Recomendado
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              Úsala a pantalla completa como una app nativa en la cancha sin barras de navegador.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
+          <p className="font-extrabold text-slate-900">
+            💡 En tu iPad / iPhone:
+          </p>
+          <p className="text-slate-600 leading-relaxed">
+            Abre esta web en <strong>Safari</strong>, toca el botón <strong>Compartir</strong> (icono de recuadro con flecha arriba ⎋) y selecciona <strong>"Añadir a la pantalla de inicio"</strong> (+).
+          </p>
+        </div>
+
+        <InstallAppButton variant="settings" label="📲 Ver Guía Paso a Paso para Descargar App" />
       </div>
 
       {/* Main WhatsApp Card */}

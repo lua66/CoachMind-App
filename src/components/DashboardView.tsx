@@ -34,6 +34,7 @@ import {
 } from '../types';
 import { getStoredReviews, ReviewModal } from './ReviewModal';
 import { AllReviewsModal } from './AllReviewsModal';
+import { InstallAppButton } from './InstallAppButton';
 
 interface DashboardViewProps {
   onNavigate: (view: ViewMode) => void;
@@ -143,15 +144,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <InstallAppButton variant="banner" label="📲 Descargar App en iPad" />
             {userProfile ? (
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => onNavigate('coach')}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer border border-slate-700"
                 >
-                  <Award className="w-4 h-4 text-slate-950" />
-                  <span>Ver Ficha de Entrenador</span>
+                  <Award className="w-4 h-4 text-amber-400" />
+                  <span>Ficha de Entrenador</span>
                 </button>
                 {onClearProfile && (
                   <button

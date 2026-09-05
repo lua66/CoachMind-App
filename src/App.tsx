@@ -21,6 +21,7 @@ import { RegistrationModal } from './components/RegistrationModal';
 import { TrialLimitModal } from './components/TrialLimitModal';
 import { ExitLikeModal } from './components/ExitLikeModal';
 import { WhatsAppInterviewModal } from './components/WhatsAppInterviewModal';
+import { InstallAppButton } from './components/InstallAppButton';
 import { consumeTrialAction } from './utils/trialManager';
 import { INITIAL_PLAYERS } from './data/initialData';
 import { auth, onAuthStateChanged, signOut, User } from './lib/firebase';
@@ -574,9 +575,12 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Temporada 2026</span>
+        <div className="flex items-center gap-2">
+          <InstallAppButton variant="header" label="Instalar App" />
+          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Temporada 2026</span>
+          </div>
         </div>
       </header>
 
