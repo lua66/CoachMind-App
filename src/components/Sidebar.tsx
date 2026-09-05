@@ -119,10 +119,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'rival-scouting' as ViewMode,
-      label: 'Área Rival Scouting',
+      label: 'Scouting 14 Jornadas',
       icon: Target,
       highlight: true,
-      badge: '8',
+      badge: '14 JOR',
     },
     {
       id: 'whiteboard' as ViewMode,

@@ -24,10 +24,11 @@ export interface TeamScoutingReportParams {
   teamName: string;
   opponentName: string;
   isLocal: boolean;
-  matchLeg: 'ida' | 'vuelta';
-  matchNumber: string;
-  scoreLocal: string;
-  scoreVisitor: string;
+  jornadaNumber?: number | string;
+  matchLeg?: 'ida' | 'vuelta';
+  matchNumber?: string;
+  scoreLocal?: string;
+  scoreVisitor?: string;
   players: PlayerStatsData[];
 }
 
@@ -36,6 +37,7 @@ export function generateTeamScoutingPdf(params: TeamScoutingReportParams) {
     teamName,
     opponentName,
     isLocal,
+    jornadaNumber,
     matchLeg,
     matchNumber,
     scoreLocal,
@@ -75,7 +77,9 @@ export function generateTeamScoutingPdf(params: TeamScoutingReportParams) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(203, 213, 225);
-  const matchInfoText = `Partido #${matchNumber || '1'} • Partido de ${matchLeg === 'ida' ? 'Ida' : 'Vuelta'} • Rival: ${opponentName || 'Rival'}`;
+  const jorPrefix = jornadaNumber ? `Jornada ${jornadaNumber} • ` : '';
+  const legStr = matchLeg ? `Partido de ${matchLeg === 'ida' ? 'Ida' : 'Vuelta'} • ` : '';
+  const matchInfoText = `${jorPrefix}Partido #${matchNumber || '1'} • ${legStr}Rival: ${opponentName || 'Rival'}`;
   doc.text(matchInfoText, 14, 28);
 
   if (scoreLocal || scoreVisitor) {
@@ -341,6 +345,8 @@ export function generateTeamScoutingPdf(params: TeamScoutingReportParams) {
 
   // Descargar archivo PDF
   const sanitizedTeamName = teamName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const filename = `Scouting_${sanitizedTeamName}_${matchLeg}_partido_${matchNumber || '1'}.pdf`;
+  const jorFile = jornadaNumber ? `jornada_${jornadaNumber}_` : '';
+  const legFile = matchLeg ? `${matchLeg}_` : '';
+  const filename = `Scouting_${jorFile}${legFile}partido_${matchNumber || '1'}_${sanitizedTeamName}.pdf`;
   doc.save(filename);
 }
