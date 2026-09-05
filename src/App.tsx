@@ -13,6 +13,7 @@ import { StatsView } from './components/StatsView';
 import { MatchAnalysisView } from './components/MatchAnalysisView';
 import { MatchManagementView } from './components/MatchManagementView';
 import { LiveMatchView } from './components/LiveMatchView';
+import { RivalScoutingView } from './components/RivalScoutingView';
 import { WhiteboardView } from './components/WhiteboardView';
 import { PlayersView } from './components/PlayersView';
 import { CoachAiView } from './components/CoachAiView';
@@ -714,6 +715,12 @@ export default function App() {
             players={players}
             userProfile={userProfile}
             onNavigate={setCurrentView}
+          />
+        )}
+
+        {currentView === 'rival-scouting' && (
+          <RivalScoutingView
+            userProfile={userProfile}
           />
         )}
 

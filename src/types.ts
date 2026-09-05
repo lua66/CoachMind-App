@@ -36,6 +36,7 @@ export type ViewMode =
   | 'match-analysis'
   | 'match-management'
   | 'live-match'
+  | 'rival-scouting'
   | 'whiteboard'
   | 'players'
   | 'coach-ai'
