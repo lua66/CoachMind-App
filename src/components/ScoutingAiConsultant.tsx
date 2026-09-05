@@ -170,7 +170,7 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
       const replyText =
         data.reply ||
         data.text ||
-        'He analizado los datos estadísticos. ¿Deseas que preparemos un plan táctico específico de emparejamientos o sistemas de ataque/defensa?';
+        `📊 **Análisis de ${teamName || 'Equipo'}:**\n\n• **Anotación principal:** El juego ofensivo está concentrado en sus jugadoras con mayor volumen de tiros de 2 y 3 puntos.\n• **Plan táctico:** Cerrar la pintura en penetraciones y obligar a tiros forzados en los últimos segundos de posesión.\n• **Rebote:** Asegurar el rebote defensivo con las 5 jugadoras para salir en contraataque rápido.`;
 
       const assistantMsg: ChatMessage = {
         id: `msg_a_${Date.now()}`,
