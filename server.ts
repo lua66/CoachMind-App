@@ -1005,17 +1005,16 @@ app.post('/api/gemini/scouting-qa', async (req, res) => {
     const ai = getGeminiClient();
 
     if (ai && userQuestion) {
-      let systemInstruction = `Eres CoachMind Scouting Analyst, el Asesor Táctico y Director de Scouting de Élite de Baloncesto FIBA.
-Tu labor es responder DIRECTAMENTE a la pregunta u observación analítica que hace el entrenador, aportando razonamiento táctico basado en los datos estadísticos disponibles.
+      let systemInstruction = `Eres CoachMind Scouting Analyst, un asesor táctico y director de scouting de baloncesto profesional FIBA.
+Tu labor es razonar libremente y responder de forma analítica, personalizada y profunda a cualquier pregunta u observación que te plantee el entrenador sobre el partido y las estadísticas del equipo.
 
-DIRECTRICES OBLIGATORIAS:
-1. Responde SIEMPRE en Español de España (Castellano).
-2. NUNCA respondas con saludos vacíos o preguntas repetitivas de relleno ("He analizado...", "¿Deseas que preparemos...?").
-3. RESPONDE DIRECTAMENTE a lo que el entrenador te está preguntando u opinando (por ejemplo, si te pregunta si anotaron poco por mérito de la defensa rival o por depender de una sola jugadora, evalúa ambas hipótesis con los datos exactos: porcentaje de puntos de la líder, acierto en tiros de 2 y 3 puntos, y defensa rival).
-4. Cita a las jugadoras específicas por su dorsal (#) y nombre, indicando sus puntos, tiros y porcentajes concretos.
-5. Estructura la respuesta con viñetas y negritas claras para lectura rápida.
-6. Aporta siempre una recomendación o ajuste táctico práctico para que el entrenador tome decisiones informadas.
-7. Longitud ideal: 120-220 palabras bien condensadas y útiles.`;
+REGLAS DE RESPUESTA:
+1. Idioma: Español de España (Castellano).
+2. Razona por ti mismo: no uses plantillas fijas ni frases hechas. Lee la pregunta del entrenador y respóndele exactamente a lo que plantea con argumentos tácticos y estadísticos reales.
+3. Si el entrenador hace una hipótesis (por ejemplo, si anotaron poco por mérito de la defensa rival o por depender de una sola jugadora, o por qué perdieron por pocos puntos), analiza los datos de puntos, porcentajes de tiro (%T2, %T3, %TL), faltas y jugadoras para corroborar o matizar su hipótesis con criterio profesional.
+4. Nombra a las jugadoras específicas involucradas con su dorsal y estadísticas para justificar tus conclusiones.
+5. Brinda soluciones y ajustes tácticos prácticos para el entrenador.
+6. Mantén un tono profesional, claro, bien estructurado con viñetas y negritas para lectura cómoda.`;
 
       if (coachPhilosophy) {
         systemInstruction += `\n\nFILOSOFÍA DEL ENTRENADOR:
@@ -1024,38 +1023,38 @@ DIRECTRICES OBLIGATORIAS:
 - Enfoque Defensivo: ${coachPhilosophy.defensiveFocus || 'Intensidad'}`;
       }
 
-      const prompt = `CONSULTA / OBSERVACIÓN DEL ENTRENADOR:
+      const prompt = `CONSULTA / PREGUNTA DEL ENTRENADOR:
 "${userQuestion}"
 
-DATOS DEL PARTIDO:
+CONTEXTO DEL PARTIDO:
 - Jornada ${jornadaNumber || 1}, Partido ${matchIndex !== undefined ? matchIndex + 1 : 1}
 - Equipo Analizado: "${teamName || 'Equipo'}" (${teamRole === 'local' ? 'Local' : 'Visitante'})
 - Rival del partido: "${matchOpponent || 'Rival'}"
 
-ESTADÍSTICAS DEL EQUIPO:
-${teamStatsSummary || 'No hay estadísticas cargadas.'}
+ESTADÍSTICAS INDIVIDUALES DE ${teamName || 'EQUIPO'}:
+${teamStatsSummary || 'No hay estadísticas individuales cargadas.'}
 ${rivalStatsSummary}
 
-Responde a la consulta del entrenador de forma directa, analítica y técnica.`;
+Analiza la pregunta del entrenador y redacta tu respuesta táctica personalizada:`;
 
       try {
         const response = await withTimeout(
           ai.models.generateContent({
-            model: 'gemini-3.8-flash',
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
               systemInstruction,
             },
           }),
-          9000
+          15000
         );
 
         const replyText = response?.text ? response.text.trim() : '';
-        if (replyText && replyText.length > 20) {
+        if (replyText && replyText.length > 10) {
           return res.json({ success: true, text: replyText, reply: replyText });
         }
       } catch (geminiErr) {
-        console.warn('Gemini scouting-qa call failed/timed out, using smart tactical engine:', geminiErr);
+        console.warn('Gemini scouting-qa call error, using dynamic analytical engine:', geminiErr);
       }
     }
 

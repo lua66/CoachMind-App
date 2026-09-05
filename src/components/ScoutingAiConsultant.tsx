@@ -2,17 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Brain,
   Send,
-  Sparkles,
   RefreshCw,
   Trash2,
-  ChevronRight,
-  Shield,
-  Zap,
-  Target,
-  Trophy,
-  HelpCircle,
   MessageSquareQuote,
-  Lightbulb,
+  Sparkles,
 } from 'lucide-react';
 import { PlayerStatsData } from '../utils/scoutingPdfGenerator';
 
@@ -72,34 +65,6 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
-
-  const quickQuestions = [
-    {
-      title: 'Plan defensivo general',
-      prompt: `¿Qué planteamiento defensivo recomiendas aplicar frente a ${teamName || 'este equipo'} según sus porcentajes y focos de anotación?`,
-      icon: Shield,
-    },
-    {
-      title: 'Frenar a las Top Anotadoras',
-      prompt: `¿Cómo debemos defender y neutralizar a las máximas anotadoras de ${teamName || 'este rival'}?`,
-      icon: Target,
-    },
-    {
-      title: 'Explotar debilidades',
-      prompt: `Analiza las estadísticas de ${teamName || 'este equipo'} e indícame cuáles son sus puntos débiles y cómo podemos explotarlos en ataque.`,
-      icon: Zap,
-    },
-    {
-      title: 'Ejercicios de la semana',
-      prompt: `Recomiéndame 3 ejercicios concretos para entrenar esta semana enfocados a contrarrestar el juego de ${teamName || 'este rival'}.`,
-      icon: Lightbulb,
-    },
-    {
-      title: 'Emparejamientos y Matchups',
-      prompt: `¿Qué tipo de defensora y asignaciones de emparejamiento recomiendas contra el quinteto principal de ${teamName || 'este rival'}?`,
-      icon: Trophy,
-    },
-  ];
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputQuery).trim();
@@ -170,7 +135,7 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
       const replyText =
         data.reply ||
         data.text ||
-        `📊 **Análisis de ${teamName || 'Equipo'}:**\n\n• **Anotación principal:** El juego ofensivo está concentrado en sus jugadoras con mayor volumen de tiros de 2 y 3 puntos.\n• **Plan táctico:** Cerrar la pintura en penetraciones y obligar a tiros forzados en los últimos segundos de posesión.\n• **Rebote:** Asegurar el rebote defensivo con las 5 jugadoras para salir en contraataque rápido.`;
+        'No se pudo generar la respuesta táctica. Por favor, revisa las estadísticas cargadas o vuelve a intentar tu consulta.';
 
       const assistantMsg: ChatMessage = {
         id: `msg_a_${Date.now()}`,
@@ -185,7 +150,7 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
       const errorMsg: ChatMessage = {
         id: `msg_err_${Date.now()}`,
         sender: 'assistant',
-        text: `🏀 **Análisis Táctico de ${teamName || 'Equipo'}:**\n\nBasándome en las estadísticas cargadas:\n• **Distribución de puntos:** Sus principales focos ofensivos están en las jugadoras con mayor volumen de tiro. Recomiendo no permitir tiros cómodos en los primeros segundos de posesión.\n• **Ajuste defensivo:** Si su acierto exterior es bajo, defiende en *Drop* o flotación sobre sus exteriores para proteger la pintura; si tienen buenas tiradoras, aplica cambios o *Flash* en bloqueos directos.\n• **Toma de decisiones:** Controla el rebote defensivo para salir en contraataque rápido antes de que organicen su balance defensivo.`,
+        text: '⚠️ Ocurrió un problema de conexión con el Asesor Táctico. Por favor, asegúrate de haber cargado jugadoras y reintenta tu pregunta.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -212,14 +177,14 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h4 className="font-black text-sm sm:text-base text-white tracking-tight flex items-center gap-1.5">
-                Asesor Táctico & Toma de Decisiones IA
+                Asesor Táctico & Scouting IA
               </h4>
-              <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-400/30">
-                Scouting Inteligente
+              <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-400/30 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Razonamiento Libre
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-0.5">
-              Pregunta lo que necesites sobre las estadísticas de <strong className="text-amber-300">{teamName || 'este equipo'}</strong> para preparar tu plan de partido y entrenamientos
+              Escribe libremente cualquier hipótesis, pregunta táctica o duda sobre el partido y las estadísticas de <strong className="text-amber-300">{teamName || 'este equipo'}</strong>
             </p>
           </div>
         </div>
@@ -237,43 +202,18 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
         )}
       </div>
 
-      {/* Preguntas Rápidas / Sugerencias Tácticas */}
-      <div className="space-y-2">
-        <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          Consultas tácticas rápidas recomendadas para el entrenador:
-        </span>
-        <div className="flex flex-wrap gap-2">
-          {quickQuestions.map((q, idx) => {
-            const Icon = q.icon;
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSendMessage(q.prompt)}
-                disabled={isLoading || players.length === 0}
-                className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-900 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-2xs"
-              >
-                <Icon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>{q.title}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Hilo de Mensajes */}
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-4 max-h-[420px] overflow-y-auto shadow-inner">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-4 max-h-[440px] overflow-y-auto shadow-inner">
         {messages.length === 0 ? (
-          <div className="text-center py-6 px-4 space-y-2">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+          <div className="text-center py-8 px-4 space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-xs">
               <MessageSquareQuote className="w-6 h-6" />
             </div>
             <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-              Sin consultas registradas para {teamName || 'este equipo'}
+              Chat Táctico Abierto con la IA
             </h5>
-            <p className="text-xs text-slate-500 max-w-lg mx-auto">
-              Haz clic en cualquiera de las consultas rápidas arriba o escribe tu propia pregunta táctica para recibir recomendaciones específicas basadas en las estadísticas cargadas.
+            <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+              Plantea cualquier duda u opinión con tus propias palabras (por ejemplo: <em>"¿Por qué crees que anotaron tan poco?"</em>, <em>"¿Cómo defender a su jugadora #12?"</em> o <em>"Plantea un 5v5 para frenar su tiro de 3"</em>). La IA analizará los datos y razonará su respuesta.
             </p>
           </div>
         ) : (
@@ -308,7 +248,7 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
         {isLoading && (
           <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-white border border-amber-200 text-slate-700 text-xs font-bold animate-pulse max-w-xs shadow-xs">
             <RefreshCw className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
-            <span>Analizando estadísticas y generando plan táctico...</span>
+            <span>Razonando y analizando estadísticas del partido...</span>
           </div>
         )}
 
@@ -332,7 +272,7 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
             placeholder={
               players.length === 0
                 ? 'Sube primero el Excel o añade jugadoras para consultar a la IA...'
-                : `Pregunta sobre ${teamName || 'este equipo'} (ej: ¿Cómo defender el bloqueo directo contra su base?)...`
+                : `Escribe tu pregunta o hipótesis sobre ${teamName || 'este equipo'}...`
             }
             className="w-full px-4 py-3 rounded-2xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 text-xs font-medium text-slate-800 placeholder-slate-400 bg-white shadow-2xs transition-all disabled:bg-slate-100 disabled:cursor-not-allowed"
           />
@@ -343,7 +283,7 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
           disabled={!inputQuery.trim() || isLoading || players.length === 0}
           className="px-5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shrink-0"
         >
-          <span>Preguntar</span>
+          <span>Consultar IA</span>
           <Send className="w-3.5 h-3.5" />
         </button>
       </form>
