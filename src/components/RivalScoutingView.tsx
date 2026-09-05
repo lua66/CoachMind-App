@@ -732,28 +732,52 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
     });
   };
 
+  // Helper para obtener los datos reales (o por defecto si no ha sido editada) de cualquier jornada
+  const getJornadaDisplayData = (jNum: number): JornadaState => {
+    if (selectedJornadaNum === jNum && jornadaData) {
+      return jornadaData;
+    }
+    const saved = localStorage.getItem(`coachmind_jornada_scouting_v3_${jNum}`);
+    if (saved) {
+      try {
+        const parsed: JornadaState = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.matches) && parsed.matches.length === 3) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error parseando datos guardados de jornada ' + jNum, e);
+      }
+    }
+    return generateDefaultJornada(jNum);
+  };
+
   // Helper para calcular cuántos equipos de una jornada tienen jugadoras cargadas
   const getJornadaStatsSummary = (jNum: number) => {
-    const saved = localStorage.getItem(`coachmind_jornada_scouting_v3_${jNum}`);
-    if (!saved) return { teamsWithData: 0, totalPlayers: 0 };
-    try {
-      const data: JornadaState = JSON.parse(saved);
-      let teamsWithData = 0;
-      let totalPlayers = 0;
-      data.matches.forEach((m) => {
-        if (m.localPlayers && m.localPlayers.length > 0) {
-          teamsWithData++;
-          totalPlayers += m.localPlayers.length;
-        }
-        if (m.visitorPlayers && m.visitorPlayers.length > 0) {
-          teamsWithData++;
-          totalPlayers += m.visitorPlayers.length;
-        }
-      });
-      return { teamsWithData, totalPlayers };
-    } catch {
-      return { teamsWithData: 0, totalPlayers: 0 };
-    }
+    const data = getJornadaDisplayData(jNum);
+    let teamsWithData = 0;
+    let totalPlayers = 0;
+    let matchesWithScore = 0;
+    data.matches.forEach((m) => {
+      if (m.localPlayers && m.localPlayers.length > 0) {
+        teamsWithData++;
+        totalPlayers += m.localPlayers.length;
+      }
+      if (m.visitorPlayers && m.visitorPlayers.length > 0) {
+        teamsWithData++;
+        totalPlayers += m.visitorPlayers.length;
+      }
+      if (
+        m.scoreLocal !== undefined &&
+        m.scoreLocal !== null &&
+        m.scoreLocal !== '' &&
+        m.scoreVisitor !== undefined &&
+        m.scoreVisitor !== null &&
+        m.scoreVisitor !== ''
+      ) {
+        matchesWithScore++;
+      }
+    });
+    return { teamsWithData, totalPlayers, matchesWithScore };
   };
 
   // ==========================================
@@ -825,7 +849,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
             {Array.from({ length: TOTAL_JORNADAS }, (_, i) => i + 1).map((jNum) => {
-              const defaultInfo = generateDefaultJornada(jNum);
+              const jInfo = getJornadaDisplayData(jNum);
               const summary = getJornadaStatsSummary(jNum);
               const isSecondRound = jNum > 7;
 
@@ -864,18 +888,48 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                       )}
                     </div>
 
-                    {/* Partidos de la Jornada */}
+                    {/* Partidos de la Jornada (Refleja los equipos reales y modificados) */}
                     <div className="space-y-1.5 pt-1">
-                      {defaultInfo.matches.map((m, mIdx) => (
-                        <div
-                          key={m.id}
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-[11px] font-bold text-slate-700 flex items-center justify-between"
-                        >
-                          <span className="truncate max-w-[45%] text-slate-900">{m.localTeam}</span>
-                          <span className="text-[10px] font-extrabold text-slate-400 uppercase">vs</span>
-                          <span className="truncate max-w-[45%] text-slate-900 text-right">{m.visitorTeam}</span>
-                        </div>
-                      ))}
+                      {jInfo.matches.map((m, mIdx) => {
+                        const hasLocalStats = m.localPlayers && m.localPlayers.length > 0;
+                        const hasVisitorStats = m.visitorPlayers && m.visitorPlayers.length > 0;
+                        const hasScore =
+                          m.scoreLocal !== undefined &&
+                          m.scoreLocal !== '' &&
+                          m.scoreVisitor !== undefined &&
+                          m.scoreVisitor !== '';
+
+                        return (
+                          <div
+                            key={m.id}
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 text-[11px] font-bold text-slate-700 flex items-center justify-between transition-colors"
+                          >
+                            <div className="flex items-center gap-1 truncate max-w-[44%]">
+                              {hasLocalStats && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Estadísticas cargadas" />
+                              )}
+                              <span className="truncate text-slate-900 font-extrabold">{m.localTeam}</span>
+                            </div>
+
+                            <div className="shrink-0 px-1 text-[10px] font-black">
+                              {hasScore ? (
+                                <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200 font-black">
+                                  {m.scoreLocal} - {m.scoreVisitor}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 uppercase font-extrabold">vs</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-1 truncate max-w-[44%]">
+                              <span className="truncate text-slate-900 font-extrabold text-right">{m.visitorTeam}</span>
+                              {hasVisitorStats && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Estadísticas cargadas" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Equipo que descansa */}
@@ -883,7 +937,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                       <span className="text-[10px] uppercase font-extrabold text-purple-600 flex items-center gap-1">
                         <Coffee className="w-3 h-3" /> Descansa:
                       </span>
-                      <span className="truncate font-black">{defaultInfo.restingTeam}</span>
+                      <span className="truncate font-black">{jInfo.restingTeam || 'Ninguno'}</span>
                     </div>
                   </div>
 
