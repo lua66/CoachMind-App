@@ -421,6 +421,40 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
   const benchPlayers = useMemo(() => playerRows.filter((r) => !r.onCourt), [playerRows]);
   const onCourtCount = onCourtPlayers.length;
 
+  // Calculation of active players in each minute of the current activeQuarter
+  const minuteCourtCounts = useMemo(() => {
+    const map: Record<number, { count: number; players: LivePlayerRow[] }> = {};
+    for (let m = 0; m <= quarterMinutes; m++) {
+      const activePlayers = playerRows.filter((p) => {
+        const events = p.quarterEvents?.[activeQuarter] || [];
+        const activeMins = getActiveMinutesList(events, quarterMinutes);
+        return activeMins.includes(m);
+      });
+      map[m] = {
+        count: activePlayers.length,
+        players: activePlayers,
+      };
+    }
+    return map;
+  }, [playerRows, activeQuarter, quarterMinutes]);
+
+  const overCapacityMinutes = useMemo(() => {
+    const list: { minute: number; count: number; players: LivePlayerRow[] }[] = [];
+    for (let m = 0; m <= quarterMinutes; m++) {
+      const data = minuteCourtCounts[m];
+      if (data && data.count > 5) {
+        list.push({
+          minute: m,
+          count: data.count,
+          players: data.players,
+        });
+      }
+    }
+    return list;
+  }, [minuteCourtCounts, quarterMinutes]);
+
+  const hasExcessPlayers = onCourtCount > 5 || overCapacityMinutes.length > 0;
+
   // Starting 5 players (strictly players who started Q1 at min 0 or marked as starting five)
   const startingFivePlayers = useMemo(() => {
     return playerRows.filter((r) => {
@@ -458,9 +492,20 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
    *   - Toggles/removes that event (undo action)
    */
   const handleToggleMinutePill = (playerId: string, quarter: QuarterKey, clickedMinute: number) => {
-    setPlayerRows((prev) =>
-      prev.map((r) => {
+    setPlayerRows((prev) => {
+      let nextOnCourtCount = 0;
+      let targetPlayerEntry = false;
+      let targetPlayerExit = false;
+      let targetPlayerStintLength = 0;
+      let targetJersey = '';
+      let targetName = '';
+      let isUndo = false;
+
+      const updated = prev.map((r) => {
         if (r.id !== playerId) return r;
+
+        targetJersey = r.jerseyNumber;
+        targetName = r.name;
 
         const currentEvents = r.quarterEvents?.[quarter] || [];
         let nextEvents = [...currentEvents];
@@ -469,10 +514,18 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
         if (existingIdx !== -1) {
           // Remove/undo clicked event
           nextEvents.splice(existingIdx, 1);
+          isUndo = true;
         } else {
           // Add event and sort chronologically
           nextEvents.push(clickedMinute);
           nextEvents.sort((a, b) => a - b);
+          const eventPos = nextEvents.indexOf(clickedMinute);
+          if (eventPos % 2 === 0) {
+            targetPlayerEntry = true;
+          } else {
+            targetPlayerExit = true;
+            targetPlayerStintLength = clickedMinute - nextEvents[eventPos - 1];
+          }
         }
 
         // Determine if player is on court:
@@ -489,21 +542,6 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
 
         const activeMins = getActiveMinutesList(nextEvents, quarterMinutes);
 
-        // Feedback toast
-        if (existingIdx === -1) {
-          const eventPos = nextEvents.indexOf(clickedMinute);
-          const isEntry = eventPos % 2 === 0;
-          if (isEntry) {
-            const startTag = quarter === 'Q1' && clickedMinute === 0 ? ' · ⭐ Quinteto Inicial' : '';
-            showToast(`🟢 #${r.jerseyNumber} ${r.name} ENTRA a pista en min ${clickedMinute}'${startTag}`);
-          } else {
-            const stintLength = clickedMinute - nextEvents[eventPos - 1];
-            showToast(`🔴 #${r.jerseyNumber} ${r.name} SALE a la banca en min ${clickedMinute}' (${stintLength}m en este tramo)`);
-          }
-        } else {
-          showToast(`↩️ Minuto ${clickedMinute}' desmarcado para #${r.jerseyNumber} ${r.name}`);
-        }
-
         return {
           ...r,
           onCourt: isNowOnCourt,
@@ -517,8 +555,25 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
             [quarter]: activeMins,
           },
         };
-      })
-    );
+      });
+
+      nextOnCourtCount = updated.filter((r) => r.onCourt).length;
+
+      if (isUndo) {
+        showToast(`↩️ Minuto ${clickedMinute}' desmarcado para #${targetJersey} ${targetName}`);
+      } else if (targetPlayerEntry) {
+        if (nextOnCourtCount > 5) {
+          showToast(`🚨 ¡ATENCIÓN! #${targetJersey} ${targetName} ENTRA a pista ➔ ¡HAY ${nextOnCourtCount} JUGADORAS EN PISTA (MÁX 5)!`);
+        } else {
+          const startTag = quarter === 'Q1' && clickedMinute === 0 ? ' · ⭐ Quinteto Inicial' : '';
+          showToast(`🟢 #${targetJersey} ${targetName} ENTRA en min ${clickedMinute}' (${nextOnCourtCount}/5 en pista)${startTag}`);
+        }
+      } else if (targetPlayerExit) {
+        showToast(`🔴 #${targetJersey} ${targetName} SALE a banca en min ${clickedMinute}' (${targetPlayerStintLength}m jugados · ${nextOnCourtCount}/5 en pista)`);
+      }
+
+      return updated;
+    });
   };
 
   // Quick preset: Select full quarter (0 to quarterMinutes)
@@ -605,21 +660,30 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
     const targetPlayer = playerRows.find((p) => p.id === playerId);
     if (!targetPlayer) return;
 
-    setPlayerRows((prev) =>
-      prev.map((r) => {
+    setPlayerRows((prev) => {
+      const updated = prev.map((r) => {
         if (r.id !== playerId) return r;
-        const nextOnCourt = !r.onCourt;
-        showToast(
-          nextOnCourt
-            ? `🟢 #${r.jerseyNumber} ${r.name} en PISTA`
-            : `⚪ #${r.jerseyNumber} ${r.name} a BANCA`
-        );
         return {
           ...r,
-          onCourt: nextOnCourt,
+          onCourt: !r.onCourt,
         };
-      })
-    );
+      });
+
+      const nextOnCourtCount = updated.filter((r) => r.onCourt).length;
+      const willBeOnCourt = !targetPlayer.onCourt;
+
+      if (willBeOnCourt && nextOnCourtCount > 5) {
+        showToast(`🚨 ¡ATENCIÓN! #${targetPlayer.jerseyNumber} ${targetPlayer.name} a PISTA ➔ ¡HAY ${nextOnCourtCount} EN PISTA (MÁXIMO 5)!`);
+      } else {
+        showToast(
+          willBeOnCourt
+            ? `🟢 #${targetPlayer.jerseyNumber} ${targetPlayer.name} en PISTA (${nextOnCourtCount}/5)`
+            : `⚪ #${targetPlayer.jerseyNumber} ${targetPlayer.name} a BANCA (${nextOnCourtCount}/5 en pista)`
+        );
+      }
+
+      return updated;
+    });
   };
 
   // Toggle Starting 5 selection in modal
@@ -1350,6 +1414,37 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
 
             {/* Top Action Buttons */}
             <div className="flex flex-wrap items-center gap-2">
+              {/* BUTTON / BADGE: JUGADORAS EN PISTA (ALERTA SI > 5) */}
+              <button
+                type="button"
+                onClick={() => setFilterAlertsOnly(filterAlertsOnly === 'oncourt' ? 'all' : 'oncourt')}
+                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer border ${
+                  onCourtCount === 5
+                    ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/20'
+                    : onCourtCount > 5
+                    ? 'bg-rose-600 text-white border-rose-300 animate-bounce shadow-xl shadow-rose-600/50 ring-2 ring-rose-300'
+                    : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/30'
+                }`}
+                title={
+                  onCourtCount === 5
+                    ? '5 jugadoras en pista (Equipo completo)'
+                    : onCourtCount > 5
+                    ? `🚨 ¡ALERTA! Hay ${onCourtCount} jugadoras en pista (Máximo 5 permitidas)`
+                    : `Hay ${onCourtCount} jugadoras en pista (Faltan ${5 - onCourtCount})`
+                }
+              >
+                {onCourtCount > 5 ? (
+                  <AlertTriangle className="w-4 h-4 text-white animate-pulse" />
+                ) : (
+                  <Users className={`w-4 h-4 ${onCourtCount === 5 ? 'stroke-[2.5]' : ''}`} />
+                )}
+                <span>
+                  {onCourtCount > 5
+                    ? `🚨 ¡EN PISTA: ${onCourtCount}/5! (+${onCourtCount - 5})`
+                    : `En Pista: ${onCourtCount}/5`}
+                </span>
+              </button>
+
               {/* BUTTON: SELECCIONAR QUINTETO INICIAL */}
               <button
                 type="button"
@@ -1668,6 +1763,80 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
         </div>
       </div>
 
+      {/* 🚨 AVISO EN PANTALLA: MÁS DE 5 JUGADORAS EN PISTA */}
+      {hasExcessPlayers && (
+        <div className="bg-rose-600 text-white rounded-3xl p-4 sm:p-5 shadow-2xl shadow-rose-600/40 border-2 border-rose-300 animate-in fade-in zoom-in-95 duration-200 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white text-rose-600 flex items-center justify-center shrink-0 shadow-md">
+                <AlertTriangle className="w-7 h-7 stroke-[2.5] animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-white text-rose-800 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-xs">
+                    ⚠️ Infracción de Rotación
+                  </span>
+                  <span className="text-xs font-bold text-rose-100">
+                    Cuarto: {activeQuarter}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white mt-0.5">
+                  ¡HAY {onCourtCount} JUGADORAS SEÑALADAS EN PISTA! (MÁXIMO 5)
+                </h3>
+                <p className="text-xs text-rose-100 font-medium">
+                  Has marcado a más de 5 jugadoras a la vez. Sienta a {onCourtCount - 5} {onCourtCount - 5 === 1 ? 'jugadora' : 'jugadoras'} para no jugar con una de más.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFilterAlertsOnly('oncourt')}
+                className="px-3.5 py-2 rounded-xl bg-white text-rose-700 hover:bg-rose-50 text-xs font-black transition-all cursor-pointer shadow-md active:scale-95"
+              >
+                🔍 Ver solo las {onCourtCount} en pista
+              </button>
+            </div>
+          </div>
+
+          {/* Current Players on Court Chips */}
+          <div className="bg-rose-700/90 rounded-2xl p-3 text-xs space-y-2 border border-rose-400/50">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-extrabold text-rose-100">Jugadoras en pista ({onCourtCount}):</span>
+              {onCourtPlayers.map((p) => (
+                <span
+                  key={p.id}
+                  className="inline-flex items-center gap-1.5 bg-white text-rose-950 px-2.5 py-1 rounded-xl font-extrabold text-xs shadow-sm"
+                >
+                  <span>#{p.jerseyNumber} {p.name}</span>
+                  <span className="text-[10px] text-slate-500 font-normal">({p.role})</span>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleOnCourt(p.id)}
+                    className="ml-1 w-4 h-4 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-700 flex items-center justify-center font-black text-[10px] cursor-pointer"
+                    title={`Sentar a #${p.jerseyNumber} ${p.name}`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            {overCapacityMinutes.length > 0 && (
+              <div className="text-rose-100 text-[11px] font-medium pt-1.5 border-t border-rose-600/70 flex items-center gap-1.5 flex-wrap">
+                <span className="font-black text-white">Minutos con más de 5 jugadoras a la vez en {activeQuarter}:</span>
+                {overCapacityMinutes.map((o) => (
+                  <span key={o.minute} className="bg-rose-900/80 px-2 py-0.5 rounded-md font-bold text-rose-200 border border-rose-500/40">
+                    Min {o.minute}' ({o.count} jugadoras)
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main Table / Grid with Exact Minute Pill Buttons */}
       <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-200/80 space-y-4">
         {/* Filters and Controls */}
@@ -1692,13 +1861,19 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
             <button
               type="button"
               onClick={() => setFilterAlertsOnly('oncourt')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                filterAlertsOnly === 'oncourt'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                onCourtCount > 5
+                  ? 'bg-rose-600 text-white border-rose-400 animate-pulse shadow-md font-black'
+                  : filterAlertsOnly === 'oncourt'
+                  ? 'bg-emerald-600 text-white shadow-sm border-emerald-600'
+                  : onCourtCount === 5
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
               }`}
             >
-              En Pista ({onCourtCount})
+              {onCourtCount > 5
+                ? `🚨 En Pista (${onCourtCount}/5 · ¡MÁS DE 5!)`
+                : `En Pista (${onCourtCount}/5)`}
             </button>
 
             <button
