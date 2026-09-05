@@ -763,6 +763,151 @@ Instrucción adicional: Utiliza los datos cuantitativos y cualitativos presentes
   }
 });
 
+// 3.2 Scouting Q&A Tactical Assistant for 14-Jornadas Scouting
+app.post('/api/gemini/scouting-qa', async (req, res) => {
+  try {
+    const {
+      question,
+      teamName,
+      teamRole,
+      jornadaNumber,
+      matchIndex,
+      matchOpponent,
+      players,
+      rivalPlayers,
+      topStats,
+      coachPhilosophy,
+      history,
+    } = req.body;
+
+    const ai = getGeminiClient();
+
+    const playersList = Array.isArray(players) ? players : [];
+    const rivalList = Array.isArray(rivalPlayers) ? rivalPlayers : [];
+
+    // Format roster text with specific metrics
+    const teamStatsSummary = playersList
+      .map((p: any) => {
+        const d = p.dorsal ? `#${p.dorsal}` : '#-';
+        const pctTL = p.tli > 0 ? `${Math.round((p.tla / p.tli) * 100)}%` : 'N/A';
+        const pctT2 = p.t2i > 0 ? `${Math.round((p.t2a / p.t2i) * 100)}%` : 'N/A';
+        const pctT3 = p.t3i > 0 ? `${Math.round((p.t3a / p.t3i) * 100)}%` : 'N/A';
+        return `• ${d} ${p.jugadora || 'Jugadora'}: ${p.pts || 0} PTS | TL: ${p.tla || 0}/${p.tli || 0} (${pctTL}) | T2: ${p.t2a || 0}/${p.t2i || 0} (${pctT2}) | T3: ${p.t3a || 0}/${p.t3i || 0} (${pctT3}) | Faltas: ${p.fc_p || 0} | Minutos: ${p.min || 0}`;
+      })
+      .join('\n');
+
+    let rivalStatsSummary = '';
+    if (rivalList.length > 0) {
+      rivalStatsSummary = `\n\nESTADÍSTICAS DEL EQUIPO RIVAL EN ESTE PARTIDO (${matchOpponent || 'Rival'}):\n` +
+        rivalList
+          .map((p: any) => {
+            const d = p.dorsal ? `#${p.dorsal}` : '#-';
+            const pctTL = p.tli > 0 ? `${Math.round((p.tla / p.tli) * 100)}%` : 'N/A';
+            const pctT2 = p.t2i > 0 ? `${Math.round((p.t2a / p.t2i) * 100)}%` : 'N/A';
+            const pctT3 = p.t3i > 0 ? `${Math.round((p.t3a / p.t3i) * 100)}%` : 'N/A';
+            return `• ${d} ${p.jugadora || 'Jugadora'}: ${p.pts || 0} PTS | TL: ${p.tla || 0}/${p.tli || 0} (${pctTL}) | T2: ${p.t2a || 0}/${p.t2i || 0} (${pctT2}) | T3: ${p.t3a || 0}/${p.t3i || 0} (${pctT3}) | Faltas: ${p.fc_p || 0}`;
+          })
+          .join('\n');
+    }
+
+    if (ai) {
+      const formattedHistory = Array.isArray(history)
+        ? history
+            .filter((msg: any) => msg && (msg.text || (msg.parts && msg.parts[0]?.text)))
+            .map((msg: any) => {
+              const isUser = msg.role === 'user' || msg.sender === 'user';
+              const textContent = msg.text || (msg.parts && msg.parts[0] ? msg.parts[0].text : '');
+              return {
+                role: isUser ? 'user' : 'model',
+                parts: [{ text: textContent }],
+              };
+            })
+        : [];
+
+      let systemInstruction = `Eres CoachMind Scouting Analyst, un Director de Scouting y Asesor Táctico de Élite de Baloncesto FIBA.
+Tu misión es asesorar al entrenador respondiendo preguntas tácticas y ayudándole en la toma de decisiones estratégicas, basándote rigurosamente en las estadísticas reales que te proporciona.
+
+CONTEXTO DE LA COMPETICIÓN:
+- Jornada de Liga: Jornada ${jornadaNumber || 1}
+- Partido: Partido ${matchIndex !== undefined ? matchIndex + 1 : 1}
+- Equipo Analizado: "${teamName || 'Equipo'}" (${teamRole === 'local' ? 'Local' : 'Visitante'})
+- Rival directo: "${matchOpponent || 'Rival'}"
+
+ESTADÍSTICAS INDIVIDUALES DEL EQUIPO ANALIZADO:
+${teamStatsSummary || 'No hay estadísticas individuales cargadas aún.'}
+${rivalStatsSummary}
+
+DIRECTRICES DE TUS RESPUESTAS:
+1. Responde siempre en Español de España (Castellano).
+2. Sé directo, táctico, pragmático y profesional.
+3. Menciona a las jugadoras específicas por su dorsal y nombre al analizar fortalezas o amenazas.
+4. Si te preguntan por planteamientos defensivos, especifica normas claras (ej: qué hacer en bloqueo directo, si flotar o puntear tiro, ayudas cortas o largas, defensa de línea de pase).
+5. Si te preguntan por cómo atacarlos o mejorar, ofrece 2 o 3 soluciones tácticas concretas y 2 ejercicios aplicables para los entrenamientos de la semana.
+6. Utiliza un formato limpio y ordenado con negritas y viñetas para que el entrenador pueda leerlo rápidamente en pista o en la sesión de vídeo.`;
+
+      if (coachPhilosophy) {
+        systemInstruction += `\n\nFILOSOFÍA DEL ENTRENADOR:
+- Estilo: ${coachPhilosophy.playStyle || 'Equilibrado'}
+- Enfoque Ofensivo: ${coachPhilosophy.offensiveFocus || 'Espaciado'}
+- Enfoque Defensivo: ${coachPhilosophy.defensiveFocus || 'Intensidad'}
+Alinea tus recomendaciones con este estilo de juego.`;
+      }
+
+      try {
+        const chat = ai.chats.create({
+          model: 'gemini-2.5-flash',
+          history: formattedHistory,
+          config: {
+            systemInstruction,
+          },
+        });
+
+        const response = await withTimeout(
+          chat.sendMessage({ message: question }),
+          8500
+        );
+
+        if (response && response.text) {
+          return res.json({ success: true, text: response.text, reply: response.text });
+        }
+      } catch (geminiErr) {
+        console.warn('Gemini scouting-qa call failed/timed out, using smart tactical fallback:', geminiErr);
+      }
+    }
+
+    // Dynamic intelligent fallback based on statistical profile
+    const topScorers = [...playersList].sort((a: any, b: any) => (b.pts || 0) - (a.pts || 0)).slice(0, 3);
+    const top3Pt = [...playersList].sort((a: any, b: any) => (b.t3a || 0) - (a.t3a || 0)).slice(0, 2);
+    const topTL = [...playersList].sort((a: any, b: any) => (b.tla || 0) - (a.tla || 0)).slice(0, 2);
+
+    const scorersNames = topScorers.map((p: any) => `${p.dorsal ? `#${p.dorsal} ` : ''}${p.jugadora} (${p.pts} pts)`).join(', ');
+    const tripleNames = top3Pt.filter((p: any) => (p.t3a || 0) > 0).map((p: any) => `${p.dorsal ? `#${p.dorsal} ` : ''}${p.jugadora} (${p.t3a}/${p.t3i || p.t3a})`).join(', ');
+
+    let fallbackReply = `🏀 **Análisis Táctico de Scouting para ${teamName || 'este equipo'}:**\n\n` +
+      `Tras evaluar los datos estadísticos de la Jornada ${jornadaNumber || 1}:\n\n` +
+      `🎯 **1. Focos Ofensivos Principales:**\n` +
+      `• El peso anotador recae principalmente en: **${scorersNames || 'sus referentes exteriores'}**.\n` +
+      `${tripleNames ? `• Amenaza desde el triple identificada en: **${tripleNames}**. Imprescindible puntear tiros sin conceder espacio (Closeout agresivo).\n` : '• Su producción se concentra en penetraciones y tiros de 2 puntos; podemos cerrar espacios en la pintura.\n'}\n` +
+      `🛡️ **2. Plan Defensivo y Toma de Decisiones:**\n` +
+      `• **Defensa de Bloqueo Directo (Pick & Roll):** Salir en *Flash* corto sobre sus anotadoras para forzar el pase hacia jugadoras de menor acierto.\n` +
+      `• **Control del Rebote:** Obligar a sus jugadoras interiores a lanzar forzadas y asegurar el rebote defensivo (*Box-Out*) para castigar con transición rápida.\n` +
+      `• **Disciplina de Faltas:** Evitar faltas tempranas en situaciones de tiro para no otorgar tiros libres fáciles.\n\n` +
+      `📋 **3. Ejercicios Recomendados para la Semana:**\n` +
+      `1. *Ejercicio de Contención 1v1 y Ayuda-Recuperación (3v3 continuo)*: Reducir penetraciones por el centro.\n` +
+      `2. *Salida de presión tras rebote y pase largo al lado débil*: Atacar su balance defensivo antes de que se ordenen.\n\n` +
+      `¿Deseas profundizar en algún emparejamiento individual o variante de defensa en zona?`;
+
+    return res.json({ success: true, text: fallbackReply, reply: fallbackReply });
+  } catch (error: any) {
+    console.error('Error in scouting-qa route:', error);
+    return res.json({
+      success: true,
+      text: 'Se ha producido un error temporal procesando la consulta. Por favor, revisa que los datos estadísticos estén cargados e inténtalo de nuevo.',
+      reply: 'Se ha producido un error temporal procesando la consulta. Por favor, revisa que los datos estadísticos estén cargados e inténtalo de nuevo.',
+    });
+  }
+});
+
 // ==========================================
 // 3.5 Cloud SQL & Firebase Auth Sync Routes
 // ==========================================

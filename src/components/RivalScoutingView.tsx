@@ -38,6 +38,7 @@ import {
   PlayerStatsData,
   generateTeamScoutingPdf,
 } from '../utils/scoutingPdfGenerator';
+import { ScoutingAiConsultant } from './ScoutingAiConsultant';
 
 interface RivalScoutingViewProps {
   userProfile?: UserProfile | null;
@@ -140,7 +141,7 @@ const generateDefaultJornada = (jornadaNum: number): JornadaState => {
   };
 };
 
-export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
+export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfile }) => {
   // Estado de navegación: Jornada seleccionada (1..14)
   const [selectedJornadaNum, setSelectedJornadaNum] = useState<number | null>(null);
 
@@ -1678,6 +1679,18 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     </tfoot>
                   </table>
                 </div>
+
+                {/* CONSULTOR TÁCTICO & TOMA DE DECISIONES IA (EQUIPO LOCAL) */}
+                <ScoutingAiConsultant
+                  teamName={currentMatch.localTeam || 'Equipo Local'}
+                  teamRole="local"
+                  jornadaNumber={selectedJornadaNum}
+                  matchIndex={activeMatchIndex}
+                  matchOpponent={currentMatch.visitorTeam || 'Equipo Visitante'}
+                  players={currentMatch.localPlayers}
+                  rivalPlayers={currentMatch.visitorPlayers}
+                  coachPhilosophy={userProfile?.coachPhilosophy}
+                />
               </div>
             )}
           </div>
@@ -1972,6 +1985,18 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     </tfoot>
                   </table>
                 </div>
+
+                {/* CONSULTOR TÁCTICO & TOMA DE DECISIONES IA (EQUIPO VISITANTE) */}
+                <ScoutingAiConsultant
+                  teamName={currentMatch.visitorTeam || 'Equipo Visitante'}
+                  teamRole="visitante"
+                  jornadaNumber={selectedJornadaNum}
+                  matchIndex={activeMatchIndex}
+                  matchOpponent={currentMatch.localTeam || 'Equipo Local'}
+                  players={currentMatch.visitorPlayers}
+                  rivalPlayers={currentMatch.localPlayers}
+                  coachPhilosophy={userProfile?.coachPhilosophy}
+                />
               </div>
             )}
           </div>
