@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Award,
   Activity,
+  Timer,
 } from 'lucide-react';
 import { ViewMode, UserProfile } from '../types';
 
@@ -107,6 +108,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Gestión del Partido',
       icon: Activity,
       highlight: true,
+    },
+    {
+      id: 'live-match' as ViewMode,
+      label: 'Partido Live',
+      icon: Timer,
+      highlight: true,
+      badge: 'LIVE',
     },
     {
       id: 'whiteboard' as ViewMode,
