@@ -1460,10 +1460,10 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     <div className="space-y-1.5">
                       {localAnalysis.topTLA.map((p, idx) => (
                         <div key={p.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-amber-200 text-xs">
-                          <span className="font-bold text-slate-800 truncate">
+                          <span className="font-bold text-slate-800 truncate mr-2">
                             {idx + 1}. {p.dorsal ? `#${p.dorsal} ` : ''}{p.jugadora}
                           </span>
-                          <span className="font-black text-amber-700">{p.tla}{p.tli ? `/${p.tli}` : ''} TL</span>
+                          <span className="font-black text-amber-700 shrink-0">{p.tla}{p.tli ? `/${p.tli}` : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1478,10 +1478,10 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     <div className="space-y-1.5">
                       {localAnalysis.topT2A.map((p, idx) => (
                         <div key={p.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-blue-200 text-xs">
-                          <span className="font-bold text-slate-800 truncate">
+                          <span className="font-bold text-slate-800 truncate mr-2">
                             {idx + 1}. {p.dorsal ? `#${p.dorsal} ` : ''}{p.jugadora}
                           </span>
-                          <span className="font-black text-blue-700">{p.t2a}{p.t2i ? `/${p.t2i}` : ''} T2</span>
+                          <span className="font-black text-blue-700 shrink-0">{p.t2a}{p.t2i ? `/${p.t2i}` : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1496,10 +1496,10 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     <div className="space-y-1.5">
                       {localAnalysis.topT3A.map((p, idx) => (
                         <div key={p.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-rose-200 text-xs">
-                          <span className="font-bold text-slate-800 truncate">
+                          <span className="font-bold text-slate-800 truncate mr-2">
                             {idx + 1}. {p.dorsal ? `#${p.dorsal} ` : ''}{p.jugadora}
                           </span>
-                          <span className="font-black text-rose-700">{p.t3a}{p.t3i ? `/${p.t3i}` : ''} T3</span>
+                          <span className="font-black text-rose-700 shrink-0">{p.t3a}{p.t3i ? `/${p.t3i}` : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1754,10 +1754,10 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     <div className="space-y-1.5">
                       {visitorAnalysis.topTLA.map((p, idx) => (
                         <div key={p.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-amber-200 text-xs">
-                          <span className="font-bold text-slate-800 truncate">
+                          <span className="font-bold text-slate-800 truncate mr-2">
                             {idx + 1}. {p.dorsal ? `#${p.dorsal} ` : ''}{p.jugadora}
                           </span>
-                          <span className="font-black text-amber-700">{p.tla}{p.tli ? `/${p.tli}` : ''} TL</span>
+                          <span className="font-black text-amber-700 shrink-0">{p.tla}{p.tli ? `/${p.tli}` : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1772,10 +1772,10 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     <div className="space-y-1.5">
                       {visitorAnalysis.topT2A.map((p, idx) => (
                         <div key={p.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-purple-200 text-xs">
-                          <span className="font-bold text-slate-800 truncate">
+                          <span className="font-bold text-slate-800 truncate mr-2">
                             {idx + 1}. {p.dorsal ? `#${p.dorsal} ` : ''}{p.jugadora}
                           </span>
-                          <span className="font-black text-purple-700">{p.t2a}{p.t2i ? `/${p.t2i}` : ''} T2</span>
+                          <span className="font-black text-purple-700 shrink-0">{p.t2a}{p.t2i ? `/${p.t2i}` : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1790,10 +1790,10 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = () => {
                     <div className="space-y-1.5">
                       {visitorAnalysis.topT3A.map((p, idx) => (
                         <div key={p.id} className="flex items-center justify-between p-2 rounded-xl bg-white border border-rose-200 text-xs">
-                          <span className="font-bold text-slate-800 truncate">
+                          <span className="font-bold text-slate-800 truncate mr-2">
                             {idx + 1}. {p.dorsal ? `#${p.dorsal} ` : ''}{p.jugadora}
                           </span>
-                          <span className="font-black text-rose-700">{p.t3a}{p.t3i ? `/${p.t3i}` : ''} T3</span>
+                          <span className="font-black text-rose-700 shrink-0">{p.t3a}{p.t3i ? `/${p.t3i}` : ''}</span>
                         </div>
                       ))}
                     </div>

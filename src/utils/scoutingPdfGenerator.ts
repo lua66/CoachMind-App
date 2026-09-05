@@ -161,9 +161,9 @@ export function generateTeamScoutingPdf(params: TeamScoutingReportParams) {
 
   const topCols = [
     { title: 'TOP 5 PUNTOS', list: topPTS, keyVal: (p: PlayerStatsData) => `${p.pts} pts`, headerBg: primaryColor },
-    { title: 'TOP 5 TIROS LIBRES (TL)', list: topTLA, keyVal: (p: PlayerStatsData) => `${p.tla}${p.tli ? `/${p.tli}` : ''} TL`, headerBg: goldAccent },
-    { title: 'TOP 5 TIROS DE 2 (T2)', list: topT2A, keyVal: (p: PlayerStatsData) => `${p.t2a}${p.t2i ? `/${p.t2i}` : ''} T2`, headerBg: [37, 99, 235] as [number, number, number] },
-    { title: 'TOP 5 TRIPLES (T3)', list: topT3A, keyVal: (p: PlayerStatsData) => `${p.t3a}${p.t3i ? `/${p.t3i}` : ''} T3`, headerBg: [225, 29, 72] as [number, number, number] },
+    { title: 'TOP 5 TIROS LIBRES', list: topTLA, keyVal: (p: PlayerStatsData) => `${p.tla}${p.tli ? `/${p.tli}` : ''}`, headerBg: goldAccent },
+    { title: 'TOP 5 TIROS DE 2', list: topT2A, keyVal: (p: PlayerStatsData) => `${p.t2a}${p.t2i ? `/${p.t2i}` : ''}`, headerBg: [37, 99, 235] as [number, number, number] },
+    { title: 'TOP 5 TRIPLES', list: topT3A, keyVal: (p: PlayerStatsData) => `${p.t3a}${p.t3i ? `/${p.t3i}` : ''}`, headerBg: [225, 29, 72] as [number, number, number] },
   ];
 
   topCols.forEach((col, idx) => {
