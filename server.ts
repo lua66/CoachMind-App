@@ -765,14 +765,17 @@ Instrucción adicional: Utiliza los datos cuantitativos y cualitativos presentes
 
 // 3.2 Scouting Q&A Tactical Assistant for 14-Jornadas Scouting
 function buildSmartScoutingFallback(params: {
-  question: string;
-  teamName: string;
-  teamRole: string;
-  jornadaNumber: number;
-  matchOpponent: string;
-  players: any[];
+  question?: string;
+  teamName?: string;
+  teamRole?: string;
+  jornadaNumber?: number;
+  matchOpponent?: string;
+  scoreLocal?: string | number;
+  scoreVisitor?: string | number;
+  players?: any[];
   rivalPlayers?: any[];
   coachPhilosophy?: any;
+  topStats?: any;
 }): string {
   const q = (params.question || '').toLowerCase();
   const team = params.teamName || 'este equipo';
@@ -780,22 +783,40 @@ function buildSmartScoutingFallback(params: {
   const rivalPlayers = Array.isArray(params.rivalPlayers) ? params.rivalPlayers : [];
 
   if (players.length === 0) {
-    return `⚠️ **Sin datos estadísticos suficientes:** No hay estadísticas de jugadoras cargadas para **${team}** en esta jornada. Sube el acta o Excel de la jornada para que pueda cruzar los datos y responder a tu consulta.`;
+    return `⚠️ **Sin datos estadísticos suficientes:** No hay estadísticas de jugadoras cargadas para **${team}** en esta jornada. Sube el acta o Excel de la jornada para que pueda cruzar los datos del Box Score y responder a tu consulta.`;
   }
 
-  // Calculate sorted statistics
-  const topScorers = [...players].sort((a, b) => (b.pts || 0) - (a.pts || 0)).filter((p) => (p.pts || 0) > 0);
-  const top3P = [...players].sort((a, b) => (b.t3a || 0) - (a.t3a || 0)).filter((p) => (p.t3a || 0) > 0);
-  const topFouls = [...players].sort((a, b) => (b.fc_p || 0) - (a.fc_p || 0)).filter((p) => (p.fc_p || 0) > 0);
-  
-  const totalPts = players.reduce((s, p) => s + (p.pts || 0), 0);
-  const totalT3A = players.reduce((s, p) => s + (p.t3a || 0), 0);
-  const totalT3I = players.reduce((s, p) => s + (p.t3i || 0), 0);
-  const totalT2A = players.reduce((s, p) => s + (p.t2a || 0), 0);
-  const totalT2I = players.reduce((s, p) => s + (p.t2i || 0), 0);
-  const totalTLA = players.reduce((s, p) => s + (p.tla || 0), 0);
-  const totalTLI = players.reduce((s, p) => s + (p.tli || 0), 0);
-  const totalFouls = players.reduce((s, p) => s + (p.fc_p || 0), 0);
+  // Calculate sorted statistics and totals
+  const normalizedPlayers = players.map((p) => {
+    const pts = p.pts !== undefined && p.pts !== null && p.pts > 0 ? Number(p.pts) : (Number(p.tla || 0) * 1 + Number(p.t2a || 0) * 2 + Number(p.t3a || 0) * 3);
+    return {
+      ...p,
+      pts,
+      tla: Number(p.tla || 0),
+      tli: Number(p.tli || p.tla || 0),
+      t2a: Number(p.t2a || 0),
+      t2i: Number(p.t2i || p.t2a || 0),
+      t3a: Number(p.t3a || 0),
+      t3i: Number(p.t3i || p.t3a || 0),
+      fc_p: Number(p.fc_p || 0),
+      min: Number(p.min || 0),
+    };
+  });
+
+  const topScorers = [...normalizedPlayers].sort((a, b) => b.pts - a.pts).filter((p) => p.pts > 0);
+  const top3P = [...normalizedPlayers].sort((a, b) => b.t3a - a.t3a).filter((p) => p.t3a > 0);
+  const top2P = [...normalizedPlayers].sort((a, b) => b.t2a - a.t2a).filter((p) => p.t2a > 0);
+  const topTL = [...normalizedPlayers].sort((a, b) => b.tla - a.tla).filter((p) => p.tla > 0);
+  const topFouls = [...normalizedPlayers].sort((a, b) => b.fc_p - a.fc_p).filter((p) => p.fc_p > 0);
+
+  const totalPts = normalizedPlayers.reduce((s, p) => s + p.pts, 0);
+  const totalT3A = normalizedPlayers.reduce((s, p) => s + p.t3a, 0);
+  const totalT3I = normalizedPlayers.reduce((s, p) => s + p.t3i, 0);
+  const totalT2A = normalizedPlayers.reduce((s, p) => s + p.t2a, 0);
+  const totalT2I = normalizedPlayers.reduce((s, p) => s + p.t2i, 0);
+  const totalTLA = normalizedPlayers.reduce((s, p) => s + p.tla, 0);
+  const totalTLI = normalizedPlayers.reduce((s, p) => s + p.tli, 0);
+  const totalFouls = normalizedPlayers.reduce((s, p) => s + p.fc_p, 0);
 
   const t3Pct = totalT3I > 0 ? Math.round((totalT3A / totalT3I) * 100) : 0;
   const t2Pct = totalT2I > 0 ? Math.round((totalT2A / totalT2I) * 100) : 0;
@@ -805,16 +826,20 @@ function buildSmartScoutingFallback(params: {
   const p2 = topScorers[1];
   const p3 = topScorers[2];
 
-  const p1Share = totalPts > 0 && p1 ? Math.round(((p1.pts || 0) / totalPts) * 100) : 0;
-  const top2Share = totalPts > 0 && p1 && p2 ? Math.round((((p1.pts || 0) + (p2.pts || 0)) / totalPts) * 100) : p1Share;
+  const p1Share = totalPts > 0 && p1 ? Math.round((p1.pts / totalPts) * 100) : 0;
+  const top2Share = totalPts > 0 && p1 && p2 ? Math.round(((p1.pts + p2.pts) / totalPts) * 100) : p1Share;
 
-  const p1Label = p1 ? `${p1.dorsal !== undefined && p1.dorsal !== null ? `#${p1.dorsal} ` : ''}${p1.jugadora || 'Líder'} (${p1.pts} pts)` : 'Anotadora líder';
-  const p2Label = p2 ? `${p2.dorsal !== undefined && p2.dorsal !== null ? `#${p2.dorsal} ` : ''}${p2.jugadora || '2ª Anotadora'} (${p2.pts} pts)` : 'Referente secundaria';
-  const p3Label = p3 ? `${p3.dorsal !== undefined && p3.dorsal !== null ? `#${p3.dorsal} ` : ''}${p3.jugadora || '3ª Opción'} (${p3.pts} pts)` : '';
+  const p1Label = p1 ? `${p1.dorsal !== undefined && p1.dorsal !== null && p1.dorsal !== '' ? `#${p1.dorsal} ` : ''}${p1.jugadora || 'Líder'} (${p1.pts} pts, ${p1.t2a}/${p1.t2i} T2, ${p1.t3a}/${p1.t3i} T3)` : 'Anotadora líder';
+  const p2Label = p2 ? `${p2.dorsal !== undefined && p2.dorsal !== null && p2.dorsal !== '' ? `#${p2.dorsal} ` : ''}${p2.jugadora || '2ª Anotadora'} (${p2.pts} pts)` : '2ª opción';
+  const p3Label = p3 ? `${p3.dorsal !== undefined && p3.dorsal !== null && p3.dorsal !== '' ? `#${p3.dorsal} ` : ''}${p3.jugadora || '3ª Anotadora'} (${p3.pts} pts)` : '';
+
+  const scoreInfo = (params.scoreLocal && params.scoreVisitor)
+    ? `Marcador del encuentro: ${params.scoreLocal} - ${params.scoreVisitor}.`
+    : '';
 
   // Check if query is about a specific player by jersey or name
-  const matchedPlayer = players.find((p) => {
-    const dStr = p.dorsal !== undefined && p.dorsal !== null ? String(p.dorsal) : '';
+  const matchedPlayer = normalizedPlayers.find((p) => {
+    const dStr = p.dorsal !== undefined && p.dorsal !== null ? String(p.dorsal).trim() : '';
     const nameStr = (p.jugadora || '').toLowerCase();
     if (dStr && (q.includes(`#${dStr}`) || q.includes(`dorsal ${dStr}`) || q.includes(`número ${dStr}`) || q.includes(`numero ${dStr}`))) return true;
     if (nameStr.length > 3 && q.includes(nameStr)) return true;
@@ -822,64 +847,70 @@ function buildSmartScoutingFallback(params: {
   });
 
   if (matchedPlayer) {
-    const d = matchedPlayer.dorsal !== undefined && matchedPlayer.dorsal !== null ? `#${matchedPlayer.dorsal}` : '';
+    const d = matchedPlayer.dorsal !== undefined && matchedPlayer.dorsal !== null && matchedPlayer.dorsal !== '' ? `#${matchedPlayer.dorsal}` : '';
     const name = matchedPlayer.jugadora || 'Jugadora';
     const pts = matchedPlayer.pts || 0;
-    const t3 = `${matchedPlayer.t3a || 0}/${matchedPlayer.t3i || 0}`;
-    const t2 = `${matchedPlayer.t2a || 0}/${matchedPlayer.t2i || 0}`;
-    const tl = `${matchedPlayer.tla || 0}/${matchedPlayer.tli || 0}`;
+    const t3 = `${matchedPlayer.t3a}/${matchedPlayer.t3i}`;
+    const t2 = `${matchedPlayer.t2a}/${matchedPlayer.t2i}`;
+    const tl = `${matchedPlayer.tla}/${matchedPlayer.tli}`;
     const flt = matchedPlayer.fc_p || 0;
-    const is3PThreat = (matchedPlayer.t3a || 0) >= 2 || ((matchedPlayer.t3i || 0) > 0 && (matchedPlayer.t3a || 0) / (matchedPlayer.t3i || 1) >= 0.33);
+    const is3PThreat = matchedPlayer.t3a >= 2 || (matchedPlayer.t3i > 0 && matchedPlayer.t3a / matchedPlayer.t3i >= 0.33);
 
-    return `🎯 **Informe Táctico Individual: ${d} ${name}**\n\n` +
-      `• **Estadísticas clave:** **${pts} puntos** | T2: ${t2} | T3: ${t3} | TL: ${tl} | Faltas: ${flt}\n` +
-      `• **Cómo defenderla:** ${is3PThreat ? 'Amenaza exterior real. Aplicar *Closeout* agresivo sin saltar a fintas, negar el tiro de 3 y obligarla a penetrar hacia el lado de las ayudas.' : 'Poco peligro exterior. Flotar 1 metro en cabecera (pasar bloqueos por detrás / *Under*) y colapsar la pintura para frenar sus penetraciones.'}\n` +
-      `• **Cómo atacarla:** ${flt >= 3 ? `Está condicionada con **${flt} faltas**. Atacarla en 1v1 directo en los primeros segundos de posesión para forzar su eliminación.` : 'Exigirle esfuerzo defensivo haciéndola defender bloqueos indirectos continuos.'}`;
+    return `🎯 **Informe Táctico Individual del Box Score: ${d} ${name}**\n\n` +
+      `• **Producción:** **${pts} puntos** (T2: ${t2} • T3: ${t3} • TL: ${tl})\n` +
+      `• **Impacto en el equipo:** Aporta el ${totalPts > 0 ? Math.round((pts / totalPts) * 100) : 0}% de los ${totalPts} puntos totales de ${team}.\n` +
+      `• **Ajuste Defensivo:** ${is3PThreat ? 'Amenaza exterior prioritaria. *Closeout* con manos arriba para negar el tiro de 3 y forzarla a penetrar hacia el lado de la ayuda interior.' : 'Flotar a 1 metro fuera de la línea de 3 y pasar bloqueos por detrás (*Under*) para cerrarle el pasillo a canasta.'}\n` +
+      `• **Ajuste Ofensivo:** ${flt >= 3 ? `Está condicionada con **${flt} faltas personales**. Buscar situaciones de 1v1 directo contra ella para cargarla y forzar rotaciones.` : 'Obligarla a defender secuencias continuadas de bloqueo indirecto para mermar su frescura ofensiva.'}`;
   }
 
-  // A. Preguntas sobre anotación baja, dependencia de una jugadora, mérito defensivo rival o análisis de partido
+  // A. Preguntas sobre bajo rendimiento, pocos puntos, derrota ajustada, dependencia o valoración global
   if (
+    q.includes('rendimiento') ||
     q.includes('poco') ||
     q.includes('anotad') ||
+    q.includes('perdi') ||
+    q.includes('perder') ||
     q.includes('depend') ||
     q.includes('sola') ||
-    q.includes('una jugadora') ||
     q.includes('defendio') ||
+    q.includes('defensa') ||
     q.includes('que crees') ||
+    q.includes('como valoras') ||
     q.includes('que opinas') ||
     q.includes('por que') ||
     q.includes('porque') ||
-    q.includes('llefia') ||
     q.includes('motivo') ||
-    q.includes('causa')
+    q.includes('causa') ||
+    q.includes('llefia') ||
+    q.includes('llefía')
   ) {
-    const isLowScore = totalPts <= 45;
-    const isHighDependence = p1Share >= 33;
-    const rivalName = params.matchOpponent || 'el rival';
+    const rivalName = params.matchOpponent || 'el equipo rival';
+    let diagnosis = `🔍 **Análisis Táctico y Estadístico de ${team} (${totalPts} PTS en total):**\n\n`;
 
-    let diagnosis = `🔍 **Diagnóstico sobre la anotación de ${team} (${totalPts} PTS totales):**\n\n`;
-
-    if (isHighDependence && p1) {
-      diagnosis += `1️⃣ **Confirmación de Dependencia Ofensiva (${p1Share}% del equipo):**\n` +
-        `   • Tu apreciación es totalmente acertada: **${p1Label}** anotó **${p1.pts} de los ${totalPts} puntos** del equipo (${p1Share}% de la anotación global).\n` +
-        `   • Si sumamos a la segunda anotadora (${p2Label}), entre ambas acumulan el **${top2Share}%** de la producción, dejando a la segunda unidad casi sin aportación.\n\n`;
-    } else {
-      diagnosis += `1️⃣ **Reparto de la Anotación:**\n` +
-        `   • La anotación estuvo algo más repartida, con ${p1Label} liderando (${p1Share}%), pero sin superar los registros habituales del grupo.\n\n`;
+    if (scoreInfo) {
+      diagnosis += `📊 **Contexto del Marcador:** ${scoreInfo}\n\n`;
     }
 
-    diagnosis += `2️⃣ **Efectividad y Mérito Defensivo de ${rivalName}:**\n` +
-      `   • **Tiro de 2 puntos:** ${totalT2A}/${totalT2I} (${t2Pct}%). ${t2Pct < 40 ? 'El rival blindó la pintura con defensas cerradas/colapsadas, negando bandejas cómodas.' : 'Tuvieron acierto aceptable cerca del aro.'}\n` +
-      `   • **Tiro de 3 puntos:** ${totalT3A}/${totalT3I} (${t3Pct}%). ${totalT3A <= 2 ? 'Incapacidad de abrir el campo desde el perímetro, lo que facilitó las ayudas defensivas del rival.' : 'Generaron peligro exterior pero faltó consistencia.'}\n` +
-      `   • **Tiros Libres:** ${totalTLA}/${totalTLI} (${tlPct}%).\n\n`;
+    // 1. Concentración / Dependencia
+    diagnosis += `1️⃣ **Foco de Anotación y Concentración Ofensiva:**\n` +
+      `   • La máxima anotadora fue **${p1Label}**, asumiendo el **${p1Share}%** de la anotación total del equipo.\n` +
+      (p2 ? `   • Junto a **${p2Label}**, entre las dos concentran el **${top2Share}% de los puntos** (${(p1?.pts || 0) + (p2?.pts || 0)} de ${totalPts} pts), lo que evidencia una rotación corta en producción y escasa aportación de la segunda unidad.\n\n` : `\n\n`);
 
-    diagnosis += `💡 **Conclusión Táctica para tu Equipo:**\n` +
-      `• Para ganarles, la clave es **negar el balón a ${p1 ? (p1.dorsal ? '#' + p1.dorsal + ' ' : '') + p1.jugadora : 'su jugadora líder'}** con defensa en 3/4 o 2v1 (*trap*); al cortar su flujo, ${team} no tiene alternativas de anotación sólidas.`;
+    // 2. Eficacia de tiro del Box Score
+    diagnosis += `2️⃣ **Eficacia en Lanzamientos de Campo:**\n` +
+      `   • **Tiro de 2 (T2):** ${totalT2A}/${totalT2I} (${t2Pct}%). ${t2Pct < 40 ? `Acierto bajo en la pintura (${t2Pct}%), lo que refleja que ${rivalName} colapsó la zona y negó bandejas cómodas.` : `Buen porcentaje interior (${t2Pct}%), su principal fuente de canastas.`}\n` +
+      `   • **Tiro de 3 (T3):** ${totalT3A}/${totalT3I} (${t3Pct}%). ${totalT3A <= 2 ? `Apenas anotaron ${totalT3A} triple(s) de ${totalT3I} intentos (${t3Pct}%). Al no abrir el campo desde el perímetro, la defensa rival pudo cerrar espacios interiores con facilidad.` : `Anotaron ${totalT3A} triples (${t3Pct}%), pero sin la consistencia suficiente para remontar tramos clave.`}\n` +
+      `   • **Tiros Libres (TL):** ${totalTLA}/${totalTLI} (${tlPct}%). ${totalTLI - totalTLA >= 4 ? `Se dejaron ${totalTLI - totalTLA} puntos en la línea de personal, un factor decisivo en finales apretados.` : 'Porcentaje de tiros libres correcto.'}\n\n`;
+
+    // 3. Recomendación táctica para el entrenador
+    diagnosis += `💡 **Diagnóstico y Plan de Acción para tu Equipo:**\n` +
+      `• **En Defensa:** Aplicar defensa agresiva sobre ${p1 ? (p1.dorsal ? '#' + p1.dorsal + ' ' : '') + (p1.jugadora || 'su líder') : 'su referente'} (negar recepciones y salto en ayudas / *trap*). Al frenar su inicio de juego, ${team} sufre un colapso ofensivo.\n` +
+      `• **En Ataque:** Atacar la pintura y forzar faltas sobre su quinteto titular para desgastarlas y aprovechar la menor profundidad de su banquillo.`;
 
     return diagnosis;
   }
 
-  // 1. Defensivo / Plan general / Frenar
+  // 1. Plan defensivo general
   if (q.includes('defens') || q.includes('frenar') || q.includes('contener') || q.includes('parar') || q.includes('planteamiento')) {
     return `🛡️ **Plan Defensivo contra ${team} (${totalPts} PTS totales):**\n\n` +
       `• **Foco prioritario:** Neutralizar a **${p1Label}** y **${p2Label}**, que concentran la mayor parte del peligro ofensivo.\n` +
@@ -889,72 +920,33 @@ function buildSmartScoutingFallback(params: {
   }
 
   // 2. Anotadoras top / Jugadoras clave
-  if (q.includes('anotadora') || q.includes('lider') || q.includes('estrella') || q.includes('peligro') || q.includes('amenaza')) {
+  if (q.includes('anotadora') || q.includes('lider') || q.includes('estrella') || q.includes('peligro') || q.includes('amenaza') || q.includes('top')) {
     return `🎯 **Neutralización de las Máximas Anotadoras de ${team}:**\n\n` +
       `1️⃣ **${p1Label}:**\n` +
       `   - *Comportamiento:* Primera opción en situaciones de aclarado y finales de posesión (${p1Share}% del equipo).\n` +
       `   - *Ajuste:* Asignarle a nuestra mejor defensora individual, negar recepción en 3/4 y hacer 2v1 (*Trap*) en poste bajo o esquina.\n\n` +
       `2️⃣ **${p2Label}:**\n` +
       `   - *Comportamiento:* Genera desde segunda línea o tiros tras pase extra.\n` +
-      `   - *Ajuste:* Ayudas cortas para no conceder tiros liberados en las esquinas.\n` +
-      `${p3 ? `\n3️⃣ **${p3Label}:** Vigilar sus cortes sin balón hacia la pintura.` : ''}`;
+      `   - *Ajuste:* Ayudas cortas para no conceder tiros liberados en las esquinas.\n\n` +
+      `${p3 ? `3️⃣ **${p3Label}:** Vigilar sus cortes sin balón hacia la pintura.` : ''}`;
   }
 
-  // 3. Debilidades / Puntos débiles / Explotar
+  // 3. Debilidades / Puntos débiles
   if (q.includes('debilidad') || q.includes('debil') || q.includes('explotar') || q.includes('atacar') || q.includes('puntos debiles')) {
     const weak3P = t3Pct < 28;
     const foulIssues = topFouls.length > 0 && (topFouls[0].fc_p || 0) >= 3;
     return `⚡ **Puntos Débiles Detectados y Cómo Explotarlos:**\n\n` +
-      `1. ${weak3P ? `**Baja eficacia en triple (${t3Pct}% T3):** Permite cerrar la defensa en la pintura y conceder tiros exteriores lejanos sin comprometer ayudas interiores.` : `**Dependencia del tiro exterior:** Si presionamos la línea de 3 y negamos el primer pase, su ofensiva se estanca.`}\n` +
+      `1. ${weak3P ? `**Baja eficacia en triple (${t3Pct}% T3 con ${totalT3A}/${totalT3I}):** Permite cerrar la defensa en la pintura y conceder tiros exteriores lejanos sin comprometer ayudas interiores.` : `**Dependencia del tiro exterior:** Si presionamos la línea de 3 y negamos el primer pase, su ofensiva se estanca.`}\n` +
       `2. ${foulIssues ? `**Problemas de faltas:** Jugadoras como ${topFouls.slice(0, 2).map((p) => `#${p.dorsal || ''} ${p.jugadora} (${p.fc_p} faltas)`).join(', ')} están cargadas. Buscar penetraciones directas hacia su posición para forzar tiros libres y rotaciones obligadas.` : `**Rotación y profundidad:** Atacar a su segunda unidad con ritmo alto de transición antes de que se planten en defensa.`}\n` +
       `3. **Pérdidas y balance defensivo:** Presionar el saque tras canasta para forzar pérdidas en primera línea y canastas fáciles de contraataque.`;
   }
 
-  // 4. Ejercicios / Entrenamiento / Semana
-  if (q.includes('ejercicio') || q.includes('entrenar') || q.includes('semana') || q.includes('tarea') || q.includes('drill')) {
-    return `💡 **3 Ejercicios Específicos para la Semana vs ${team}:**\n\n` +
-      `1️⃣ **Defensa de Bloqueo Directo y Rotación 3v3 (15 min):**\n` +
-      `   • *Desarrollo:* 3 atacantes vs 3 defensoras con P&R continuo en cabecera.\n` +
-      `   • *Consigna:* Aplicar ${t3Pct >= 30 ? 'Show agresivo y salto de la última defensora' : 'Drop con paso por detrás'} comunicando en voz alta.\n\n` +
-      `2️⃣ **Ataque contra Defensa Cerrada / Pintura Colapsada (15 min):**\n` +
-      `   • *Desarrollo:* 4v4 con obligación de invertir el balón mínimo 2 veces antes del tiro.\n` +
-      `   • *Consigna:* Paciencia en las esquinas y cortes al lado ciego (*backdoor*).\n\n` +
-      `3️⃣ **Transición Ofensiva Rápida tras Rebote (10 min):**\n` +
-      `   • *Desarrollo:* Cierre de rebote 2v2 + pase de apertura de béisbol para salida 3v2 a pista contraria.\n` +
-      `   • *Consigna:* Finalizar en menos de 6 segundos.`;
-  }
-
-  // 5. Matchups / Emparejamientos
-  if (q.includes('matchup') || q.includes('emparejamiento') || q.includes('asignacion') || q.includes('marca')) {
-    return `🏆 **Propuesta de Emparejamientos Defensivos vs ${team}:**\n\n` +
-      topScorers.slice(0, 4).map((p, i) => {
-        const d = p.dorsal ? `#${p.dorsal}` : '';
-        const roleDesc = i === 0 ? 'Nuestra defensora perimetral más intensa y rápida' : i === 1 ? 'Defensora disciplinada que no salte a fintas' : i === 2 ? 'Defensora con presencia física y envergadura' : 'Defensora atenta al rebote y cortes';
-        return `• **Contra ${d} ${p.jugadora} (${p.pts} pts):** Asignar a *${roleDesc}*.`;
-      }).join('\n') +
-      `\n\n💡 *Regla de equipo:* En bloqueos indirectos perseguir la trayectoria; en bloqueos directos ejecutar la norma establecida sin improvisar.`;
-  }
-
-  // 6. Bloqueos / PnR
-  if (q.includes('bloqueo') || q.includes('pick') || q.includes('pnr')) {
-    return `🏀 **Instrucciones para Defender el Pick & Roll de ${team}:**\n\n` +
-      `• **Si el manejador es ${p1Label}:** Salir en *Flash/Over* para no dejarle tirar tras bote. La defensora del bloqueador retrasa el avance 1 segundo mientras la compañera recupera por delante.\n` +
-      `• **Si el balón lo lleva otra jugadora:** Defender en *Drop* (hundimiento), pasar por debajo (*Under*) y negar la penetración al centro.\n` +
-      `• **Ayuda del lado débil:** La defensora de la esquina contraria se sitúa con un pie en la botella (posición de *Last Man*) para frenar la continuación al aro.`;
-  }
-
-  // 7. Zona / Presión
-  if (q.includes('zona') || q.includes('presion') || q.includes('trampa')) {
-    return `🛡️ **Uso de Defensas Alternativas vs ${team}:**\n\n` +
-      `• **Defensa Zonal 2-3:** ${t3Pct < 30 ? `**ALTAMENTE RECOMENDADA.** Con solo un ${t3Pct}% en T3 (${totalT3A}/${totalT3I}), la zona 2-3 les obligará a tirar de fuera y protegerá nuestras faltas.` : `**USAR CON PRECAUCIÓN.** Tienen buen acierto exterior (${t3Pct}% T3). Si se usa, que sea zonal 1-3-1 con trap en esquinas tras tiempo muerto.`}\n` +
-      `• **Presión a toda pista:** Aplicar presión 2-2-1 tras tiros libres propios para consumir 8 segundos de su posesión antes del medio campo.`;
-  }
-
-  // 8. General / Fallback directo y con alta información
-  return `📊 **Claves Tácticas sobre ${team} (Jornada ${params.jornadaNumber || 1}):**\n\n` +
-    `• **Foco Ofensivo:** Producen ${totalPts} puntos (${totalT2A} canastas de 2, ${totalT3A} triples, ${totalTLA} tiros libres). Su peligro principal es **${p1Label}** (${p1Share}% del total).\n` +
-    `• **Ajuste en Pista:** ${t3Pct >= 30 ? `Puntear tiro exterior (${t3Pct}% T3) y evitar rotaciones innecesarias.` : `Cerrar la pintura (${t2Pct}% en T2) y flotar lanzamientos exteriores.`}\n` +
-    `• **Factor Decisivo:** ${totalTLI > 12 ? `Provocan muchos tiros libres (${totalTLI} intentos). Defender con brazos verticales y sin meter manos en el bote.` : `Apretar su primera línea para forzar pérdidas y salir al contraataque rápido.`}`;
+  // 4. Fallback general con datos completos del Box Score
+  return `📊 **Análisis Táctico sobre ${team} (Jornada ${params.jornadaNumber || 1}):**\n\n` +
+    `• **Producción Ofensiva:** ${totalPts} puntos totales repartidos en ${totalT2A}/${totalT2I} T2 (${t2Pct}%), ${totalT3A}/${totalT3I} T3 (${t3Pct}%) y ${totalTLA}/${totalTLI} TL (${tlPct}%).\n` +
+    `• **Referente Ofensiva:** **${p1Label}** genera el ${p1Share}% de la anotación global.\n` +
+    `• **Clave Táctica:** ${t3Pct >= 30 ? `Vigilar el perímetro (${t3Pct}% en T3) y evitar sobreayudas que liberen esquinas.` : `Colapsar la pintura (${t2Pct}% en T2) flotando a las tiradoras exteriores.`}\n` +
+    `• **Recomendación:** Mantener un ritmo alto de juego para desgastar a sus jugadoras clave y explotar los minutos de su segunda unidad.`;
 }
 
 app.post('/api/gemini/scouting-qa', async (req, res) => {
@@ -966,6 +958,8 @@ app.post('/api/gemini/scouting-qa', async (req, res) => {
       jornadaNumber,
       matchIndex,
       matchOpponent,
+      scoreLocal,
+      scoreVisitor,
       players,
       rivalPlayers,
       topStats,
@@ -977,27 +971,67 @@ app.post('/api/gemini/scouting-qa', async (req, res) => {
     const playersList = Array.isArray(players) ? players : [];
     const rivalList = Array.isArray(rivalPlayers) ? rivalPlayers : [];
 
-    // Format roster text with specific metrics
+    // Format individual box score metrics
     const teamStatsSummary = playersList
       .map((p: any) => {
-        const d = p.dorsal !== undefined && p.dorsal !== null ? `#${p.dorsal}` : '#-';
-        const pctTL = p.tli > 0 ? `${Math.round((p.tla / p.tli) * 100)}%` : '0%';
-        const pctT2 = p.t2i > 0 ? `${Math.round((p.t2a / p.t2i) * 100)}%` : '0%';
-        const pctT3 = p.t3i > 0 ? `${Math.round((p.t3a / p.t3i) * 100)}%` : '0%';
-        return `• ${d} ${p.jugadora || 'Jugadora'}: ${p.pts || 0} PTS | TL: ${p.tla || 0}/${p.tli || 0} (${pctTL}) | T2: ${p.t2a || 0}/${p.t2i || 0} (${pctT2}) | T3: ${p.t3a || 0}/${p.t3i || 0} (${pctT3}) | Faltas: ${p.fc_p || 0} | Minutos: ${p.min || 0}`;
+        const d = p.dorsal !== undefined && p.dorsal !== null && p.dorsal !== '' ? `#${p.dorsal}` : '#-';
+        const tla = Number(p.tla || 0);
+        const tli = Number(p.tli || tla);
+        const t2a = Number(p.t2a || 0);
+        const t2i = Number(p.t2i || t2a);
+        const t3a = Number(p.t3a || 0);
+        const t3i = Number(p.t3i || t3a);
+        const pts = Number(p.pts !== undefined && p.pts !== null ? p.pts : (tla * 1 + t2a * 2 + t3a * 3));
+        const pctTL = tli > 0 ? `${Math.round((tla / tli) * 100)}%` : '-';
+        const pctT2 = t2i > 0 ? `${Math.round((t2a / t2i) * 100)}%` : '-';
+        const pctT3 = t3i > 0 ? `${Math.round((t3a / t3i) * 100)}%` : '-';
+        return `• ${d} ${p.jugadora || 'Jugadora'}: ${pts} PTS | T2: ${t2a}/${t2i} (${pctT2}) | T3: ${t3a}/${t3i} (${pctT3}) | TL: ${tla}/${tli} (${pctTL}) | Faltas: ${p.fc_p || 0} | Min: ${p.min || 0}`;
       })
       .join('\n');
+
+    // Totals
+    const totalPts = playersList.reduce((s: number, p: any) => s + Number(p.pts || (p.tla * 1 + p.t2a * 2 + p.t3a * 3) || 0), 0);
+    const totalT2A = playersList.reduce((s: number, p: any) => s + Number(p.t2a || 0), 0);
+    const totalT2I = playersList.reduce((s: number, p: any) => s + Number(p.t2i || p.t2a || 0), 0);
+    const totalT3A = playersList.reduce((s: number, p: any) => s + Number(p.t3a || 0), 0);
+    const totalT3I = playersList.reduce((s: number, p: any) => s + Number(p.t3i || p.t3a || 0), 0);
+    const totalTLA = playersList.reduce((s: number, p: any) => s + Number(p.tla || 0), 0);
+    const totalTLI = playersList.reduce((s: number, p: any) => s + Number(p.tli || p.tla || 0), 0);
+
+    const pctT2Total = totalT2I > 0 ? `${Math.round((totalT2A / totalT2I) * 100)}%` : '0%';
+    const pctT3Total = totalT3I > 0 ? `${Math.round((totalT3A / totalT3I) * 100)}%` : '0%';
+    const pctTLTotal = totalTLI > 0 ? `${Math.round((totalTLA / totalTLI) * 100)}%` : '0%';
+
+    let topStatsSummary = '';
+    if (topStats) {
+      if (Array.isArray(topStats.topPTS) && topStats.topPTS.length > 0) {
+        topStatsSummary += `\n- TOP 5 ANOTADORAS: ` + topStats.topPTS.map((p: any) => `${p.dorsal ? '#' + p.dorsal + ' ' : ''}${p.jugadora} (${p.pts} pts)`).join(', ');
+      }
+      if (Array.isArray(topStats.topT3A) && topStats.topT3A.length > 0) {
+        topStatsSummary += `\n- TOP 5 TRIPLES (T3A): ` + topStats.topT3A.map((p: any) => `${p.dorsal ? '#' + p.dorsal + ' ' : ''}${p.jugadora} (${p.t3a}/${p.t3i} T3)`).join(', ');
+      }
+      if (Array.isArray(topStats.topT2A) && topStats.topT2A.length > 0) {
+        topStatsSummary += `\n- TOP 5 TIROS DE 2 (T2A): ` + topStats.topT2A.map((p: any) => `${p.dorsal ? '#' + p.dorsal + ' ' : ''}${p.jugadora} (${p.t2a}/${p.t2i} T2)`).join(', ');
+      }
+      if (Array.isArray(topStats.topTLA) && topStats.topTLA.length > 0) {
+        topStatsSummary += `\n- TOP 5 TIROS LIBRES (TLA): ` + topStats.topTLA.map((p: any) => `${p.dorsal ? '#' + p.dorsal + ' ' : ''}${p.jugadora} (${p.tla}/${p.tli} TL)`).join(', ');
+      }
+    }
 
     let rivalStatsSummary = '';
     if (rivalList.length > 0) {
       rivalStatsSummary = `\n\nESTADÍSTICAS DEL EQUIPO RIVAL (${matchOpponent || 'Rival'}):\n` +
         rivalList
           .map((p: any) => {
-            const d = p.dorsal !== undefined && p.dorsal !== null ? `#${p.dorsal}` : '#-';
-            const pctTL = p.tli > 0 ? `${Math.round((p.tla / p.tli) * 100)}%` : '0%';
-            const pctT2 = p.t2i > 0 ? `${Math.round((p.t2a / p.t2i) * 100)}%` : '0%';
-            const pctT3 = p.t3i > 0 ? `${Math.round((p.t3a / p.t3i) * 100)}%` : '0%';
-            return `• ${d} ${p.jugadora || 'Jugadora'}: ${p.pts || 0} PTS | TL: ${p.tla || 0}/${p.tli || 0} (${pctTL}) | T2: ${p.t2a || 0}/${p.t2i || 0} (${pctT2}) | T3: ${p.t3a || 0}/${p.t3i || 0} (${pctT3}) | Faltas: ${p.fc_p || 0}`;
+            const d = p.dorsal !== undefined && p.dorsal !== null && p.dorsal !== '' ? `#${p.dorsal}` : '#-';
+            const tla = Number(p.tla || 0);
+            const tli = Number(p.tli || tla);
+            const t2a = Number(p.t2a || 0);
+            const t2i = Number(p.t2i || t2a);
+            const t3a = Number(p.t3a || 0);
+            const t3i = Number(p.t3i || t3a);
+            const pts = Number(p.pts !== undefined && p.pts !== null ? p.pts : (tla * 1 + t2a * 2 + t3a * 3));
+            return `• ${d} ${p.jugadora || 'Jugadora'}: ${pts} PTS | T2: ${t2a}/${t2i} | T3: ${t3a}/${t3i} | TL: ${tla}/${tli} | Faltas: ${p.fc_p || 0}`;
           })
           .join('\n');
     }
@@ -1005,16 +1039,18 @@ app.post('/api/gemini/scouting-qa', async (req, res) => {
     const ai = getGeminiClient();
 
     if (ai && userQuestion) {
-      let systemInstruction = `Eres CoachMind Scouting Analyst, un asesor táctico y director de scouting de baloncesto profesional FIBA.
-Tu labor es razonar libremente y responder de forma analítica, personalizada y profunda a cualquier pregunta u observación que te plantee el entrenador sobre el partido y las estadísticas del equipo.
+      let systemInstruction = `Eres CoachMind Scouting Analyst, el Asesor Táctico y Director de Scouting de Baloncesto Profesional FIBA.
+Tienes acceso completo e integrado al Box Score del partido, marcadores, totales de equipo, porcentajes de tiro (%TL, %T2, %T3) y rankings Top 5 de las jugadoras.
 
-REGLAS DE RESPUESTA:
-1. Idioma: Español de España (Castellano).
-2. Razona por ti mismo: no uses plantillas fijas ni frases hechas. Lee la pregunta del entrenador y respóndele exactamente a lo que plantea con argumentos tácticos y estadísticos reales.
-3. Si el entrenador hace una hipótesis (por ejemplo, si anotaron poco por mérito de la defensa rival o por depender de una sola jugadora, o por qué perdieron por pocos puntos), analiza los datos de puntos, porcentajes de tiro (%T2, %T3, %TL), faltas y jugadoras para corroborar o matizar su hipótesis con criterio profesional.
-4. Nombra a las jugadoras específicas involucradas con su dorsal y estadísticas para justificar tus conclusiones.
-5. Brinda soluciones y ajustes tácticos prácticos para el entrenador.
-6. Mantén un tono profesional, claro, bien estructurado con viñetas y negritas para lectura cómoda.`;
+TU MISIÓN:
+1. Responde SIEMPRE en Español de España (Castellano).
+2. Razona por ti mismo de forma personalizada y analítica sobre la pregunta concreta u observación que te formula el entrenador.
+3. Si el entrenador pregunta por qué perdieron por pocos puntos, o por qué tuvieron bajo rendimiento o baja anotación, o si dependieron de una jugadora:
+   - Analiza los datos exactos del Box Score y de los Top 5: cuántos puntos anotó cada líder (#dorsal y nombre), qué porcentaje del total representan, los porcentajes de tiro de 2 y 3 puntos (%T2 y %T3), los tiros libres fallados y la aportación de la rotación.
+   - Contrasta con el rival y el marcador si están disponibles para valorar el mérito defensivo o las claves del partido.
+4. Cita a las jugadoras por su nombre y dorsal con sus estadísticas exactas para justificar tus conclusiones.
+5. Ofrece recomendaciones tácticas prácticas para el entrenador (cómo defenderlas, cómo atacarlas o qué entrenar).
+6. Mantén un tono profesional, claro, directo y bien estructurado con negritas y viñetas.`;
 
       if (coachPhilosophy) {
         systemInstruction += `\n\nFILOSOFÍA DEL ENTRENADOR:
@@ -1026,21 +1062,31 @@ REGLAS DE RESPUESTA:
       const prompt = `CONSULTA / PREGUNTA DEL ENTRENADOR:
 "${userQuestion}"
 
-CONTEXTO DEL PARTIDO:
+DATOS Y MARCADOR DEL PARTIDO:
 - Jornada ${jornadaNumber || 1}, Partido ${matchIndex !== undefined ? matchIndex + 1 : 1}
 - Equipo Analizado: "${teamName || 'Equipo'}" (${teamRole === 'local' ? 'Local' : 'Visitante'})
+- Marcador registrado: ${scoreLocal !== undefined && scoreLocal !== '' ? scoreLocal : '?'} (Local) - ${scoreVisitor !== undefined && scoreVisitor !== '' ? scoreVisitor : '?'} (Visitante)
 - Rival del partido: "${matchOpponent || 'Rival'}"
 
-ESTADÍSTICAS INDIVIDUALES DE ${teamName || 'EQUIPO'}:
+TOTALES DE EQUIPO (${teamName}):
+- Puntos Totales: ${totalPts} PTS
+- Tiros de 2 (T2): ${totalT2A}/${totalT2I} (${pctT2Total})
+- Triples (T3): ${totalT3A}/${totalT3I} (${pctT3Total})
+- Tiros Libres (TL): ${totalTLA}/${totalTLI} (${pctTLTotal})
+
+RANKINGS TOP 5 DE ${teamName}:
+${topStatsSummary || '- Calculados a partir del Box Score.'}
+
+BOX SCORE COMPLETO DE JUGADORAS DE ${teamName}:
 ${teamStatsSummary || 'No hay estadísticas individuales cargadas.'}
 ${rivalStatsSummary}
 
-Analiza la pregunta del entrenador y redacta tu respuesta táctica personalizada:`;
+Analiza toda la información estadística anterior y responde a la consulta del entrenador con criterio táctico profesional:`;
 
       try {
         const response = await withTimeout(
           ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
             config: {
               systemInstruction,
@@ -1054,20 +1100,23 @@ Analiza la pregunta del entrenador y redacta tu respuesta táctica personalizada
           return res.json({ success: true, text: replyText, reply: replyText });
         }
       } catch (geminiErr) {
-        console.warn('Gemini scouting-qa call error, using dynamic analytical engine:', geminiErr);
+        console.warn('Gemini scouting-qa call error, falling back to analytical tactical engine:', geminiErr);
       }
     }
 
-    // Dynamic intelligent tactical answer generator
+    // Dynamic intelligent tactical fallback using all calculated stats
     const tacticalReply = buildSmartScoutingFallback({
       question: userQuestion,
       teamName: teamName || 'este equipo',
       teamRole: teamRole || 'local',
       jornadaNumber: jornadaNumber || 1,
       matchOpponent: matchOpponent || 'Rival',
+      scoreLocal,
+      scoreVisitor,
       players: playersList,
       rivalPlayers: rivalList,
       coachPhilosophy,
+      topStats,
     });
 
     return res.json({ success: true, text: tacticalReply, reply: tacticalReply });
@@ -1079,9 +1128,12 @@ Analiza la pregunta del entrenador y redacta tu respuesta táctica personalizada
       teamRole: req.body?.teamRole || 'local',
       jornadaNumber: req.body?.jornadaNumber || 1,
       matchOpponent: req.body?.matchOpponent || 'Rival',
+      scoreLocal: req.body?.scoreLocal,
+      scoreVisitor: req.body?.scoreVisitor,
       players: req.body?.players || [],
       rivalPlayers: req.body?.rivalPlayers || [],
       coachPhilosophy: req.body?.coachPhilosophy,
+      topStats: req.body?.topStats,
     });
     return res.json({ success: true, text: tacticalReply, reply: tacticalReply });
   }

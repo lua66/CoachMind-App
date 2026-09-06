@@ -22,8 +22,12 @@ interface ScoutingAiConsultantProps {
   jornadaNumber: number;
   matchIndex: number;
   matchOpponent: string;
+  scoreLocal?: string;
+  scoreVisitor?: string;
   players: PlayerStatsData[];
   rivalPlayers?: PlayerStatsData[];
+  teamAnalysis?: any;
+  rivalAnalysis?: any;
   coachPhilosophy?: any;
 }
 
@@ -33,8 +37,12 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
   jornadaNumber,
   matchIndex,
   matchOpponent,
+  scoreLocal,
+  scoreVisitor,
   players,
   rivalPlayers = [],
+  teamAnalysis,
+  rivalAnalysis,
   coachPhilosophy,
 }) => {
   const storageKey = `coachmind_scouting_chat_j${jornadaNumber}_m${matchIndex}_${teamRole}`;
@@ -51,7 +59,8 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
 
   const [inputQuery, setInputQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isInitialMount = useRef(true);
 
   // Save conversation state
   useEffect(() => {
@@ -62,9 +71,19 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
     }
   }, [messages, storageKey]);
 
+  // Only auto-scroll the internal chat box container when user chats, NEVER scroll the browser window
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [messages.length, isLoading]);
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputQuery).trim();
@@ -82,19 +101,36 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
     setIsLoading(true);
 
     try {
-      // Build top stats summary
-      const topPTS = [...players].sort((a, b) => b.pts - a.pts).slice(0, 5);
-      const topTLA = [...players].sort((a, b) => b.tla - a.tla).slice(0, 5);
-      const topT2A = [...players].sort((a, b) => b.t2a - a.t2a).slice(0, 5);
-      const topT3A = [...players].sort((a, b) => b.t3a - a.t3a).slice(0, 5);
+      // Normalize player stats
+      const normalizedPlayers = players.map((p) => {
+        const pts = Number(p.pts || (Number(p.tla || 0) * 1 + Number(p.t2a || 0) * 2 + Number(p.t3a || 0) * 3));
+        return {
+          ...p,
+          pts,
+          tla: Number(p.tla || 0),
+          tli: Number(p.tli || p.tla || 0),
+          t2a: Number(p.t2a || 0),
+          t2i: Number(p.t2i || p.t2a || 0),
+          t3a: Number(p.t3a || 0),
+          t3i: Number(p.t3i || p.t3a || 0),
+          fc_p: Number(p.fc_p || 0),
+          min: Number(p.min || 0),
+        };
+      });
 
-      const totalPTS = players.reduce((sum, p) => sum + (p.pts || 0), 0);
-      const totalTLA = players.reduce((sum, p) => sum + (p.tla || 0), 0);
-      const totalTLI = players.reduce((sum, p) => sum + (p.tli || 0), 0);
-      const totalT2A = players.reduce((sum, p) => sum + (p.t2a || 0), 0);
-      const totalT2I = players.reduce((sum, p) => sum + (p.t2i || 0), 0);
-      const totalT3A = players.reduce((sum, p) => sum + (p.t3a || 0), 0);
-      const totalT3I = players.reduce((sum, p) => sum + (p.t3i || 0), 0);
+      // Build top stats summary
+      const topPTS = teamAnalysis?.topPTS || [...normalizedPlayers].sort((a, b) => b.pts - a.pts).slice(0, 5);
+      const topTLA = teamAnalysis?.topTLA || [...normalizedPlayers].sort((a, b) => b.tla - a.tla).slice(0, 5);
+      const topT2A = teamAnalysis?.topT2A || [...normalizedPlayers].sort((a, b) => b.t2a - a.t2a).slice(0, 5);
+      const topT3A = teamAnalysis?.topT3A || [...normalizedPlayers].sort((a, b) => b.t3a - a.t3a).slice(0, 5);
+
+      const totalPTS = teamAnalysis?.totalPTS !== undefined ? teamAnalysis.totalPTS : normalizedPlayers.reduce((sum, p) => sum + (p.pts || 0), 0);
+      const totalTLA = teamAnalysis?.totalTLA !== undefined ? teamAnalysis.totalTLA : normalizedPlayers.reduce((sum, p) => sum + (p.tla || 0), 0);
+      const totalTLI = teamAnalysis?.totalTLI !== undefined ? teamAnalysis.totalTLI : normalizedPlayers.reduce((sum, p) => sum + (p.tli || 0), 0);
+      const totalT2A = teamAnalysis?.totalT2A !== undefined ? teamAnalysis.totalT2A : normalizedPlayers.reduce((sum, p) => sum + (p.t2a || 0), 0);
+      const totalT2I = teamAnalysis?.totalT2I !== undefined ? teamAnalysis.totalT2I : normalizedPlayers.reduce((sum, p) => sum + (p.t2i || 0), 0);
+      const totalT3A = teamAnalysis?.totalT3A !== undefined ? teamAnalysis.totalT3A : normalizedPlayers.reduce((sum, p) => sum + (p.t3a || 0), 0);
+      const totalT3I = teamAnalysis?.totalT3I !== undefined ? teamAnalysis.totalT3I : normalizedPlayers.reduce((sum, p) => sum + (p.t3i || 0), 0);
 
       const historyFormatted = messages.map((m) => ({
         role: m.sender === 'user' ? 'user' : 'model',
@@ -111,7 +147,9 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
           jornadaNumber,
           matchIndex,
           matchOpponent,
-          players,
+          scoreLocal,
+          scoreVisitor,
+          players: normalizedPlayers,
           rivalPlayers,
           topStats: {
             topPTS,
@@ -203,7 +241,10 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
       </div>
 
       {/* Hilo de Mensajes */}
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-4 max-h-[440px] overflow-y-auto shadow-inner">
+      <div
+        ref={chatContainerRef}
+        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-4 max-h-[440px] overflow-y-auto shadow-inner"
+      >
         {messages.length === 0 ? (
           <div className="text-center py-8 px-4 space-y-3">
             <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-xs">
@@ -251,8 +292,6 @@ export const ScoutingAiConsultant: React.FC<ScoutingAiConsultantProps> = ({
             <span>Razonando y analizando estadísticas del partido...</span>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input de Pregunta del Entrenador */}

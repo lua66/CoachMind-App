@@ -168,6 +168,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
 
   // Cargar datos de la jornada al cambiar
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
     if (!selectedJornadaNum) return;
     const saved = localStorage.getItem(`coachmind_jornada_scouting_v3_${selectedJornadaNum}`);
     if (saved) {
@@ -1741,8 +1742,12 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                   jornadaNumber={selectedJornadaNum}
                   matchIndex={activeMatchIndex}
                   matchOpponent={currentMatch.visitorTeam || 'Equipo Visitante'}
-                  players={currentMatch.localPlayers}
-                  rivalPlayers={currentMatch.visitorPlayers}
+                  scoreLocal={currentMatch.scoreLocal}
+                  scoreVisitor={currentMatch.scoreVisitor}
+                  players={localAnalysis.players}
+                  rivalPlayers={visitorAnalysis.players}
+                  teamAnalysis={localAnalysis}
+                  rivalAnalysis={visitorAnalysis}
                   coachPhilosophy={userProfile?.coachPhilosophy}
                 />
               </div>
@@ -2047,8 +2052,12 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                   jornadaNumber={selectedJornadaNum}
                   matchIndex={activeMatchIndex}
                   matchOpponent={currentMatch.localTeam || 'Equipo Local'}
-                  players={currentMatch.visitorPlayers}
-                  rivalPlayers={currentMatch.localPlayers}
+                  scoreLocal={currentMatch.scoreLocal}
+                  scoreVisitor={currentMatch.scoreVisitor}
+                  players={visitorAnalysis.players}
+                  rivalPlayers={localAnalysis.players}
+                  teamAnalysis={visitorAnalysis}
+                  rivalAnalysis={localAnalysis}
                   coachPhilosophy={userProfile?.coachPhilosophy}
                 />
               </div>
