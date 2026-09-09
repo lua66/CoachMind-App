@@ -29,14 +29,32 @@ function withTimeout<T>(promise: Promise<T>, ms: number = 7500): Promise<T> {
   ]);
 }
 
+// Helper to retrieve API key from standard environment variables
+function getEffectiveApiKey(): { key: string; source: string } | null {
+  const candidates = [
+    { name: 'GEMINI_API_KEY', val: process.env.GEMINI_API_KEY },
+    { name: 'VITE_GEMINI_API_KEY', val: process.env.VITE_GEMINI_API_KEY },
+    { name: 'GOOGLE_API_KEY', val: process.env.GOOGLE_API_KEY },
+    { name: 'GOOGLE_GENAI_API_KEY', val: process.env.GOOGLE_GENAI_API_KEY },
+  ];
+
+  for (const c of candidates) {
+    const v = (c.val || '').trim();
+    if (v && v !== 'MY_GEMINI_API_KEY' && !v.includes('MY_GEMINI_API_KEY')) {
+      return { key: v, source: c.name };
+    }
+  }
+  return null;
+}
+
 // Lazy initializer for Gemini client to safely handle missing keys at startup
 function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.includes('MY_GEMINI_API_KEY')) {
+  const detected = getEffectiveApiKey();
+  if (!detected) {
     return null;
   }
   return new GoogleGenAI({
-    apiKey,
+    apiKey: detected.key,
     httpOptions: {
       headers: {
         'User-Agent': 'aistudio-build',
@@ -44,6 +62,71 @@ function getGeminiClient() {
     },
   });
 }
+
+// Status & Diagnostic endpoint to check API key status and test Gemini model connectivity
+app.get(['/api/gemini/status', '/api/status'], async (_req, res) => {
+  const detected = getEffectiveApiKey();
+  if (!detected) {
+    return res.status(200).json({
+      success: false,
+      hasKey: false,
+      message: 'No se ha detectado ninguna API Key válida de Gemini en las variables de entorno (GEMINI_API_KEY).',
+      environment: process.env.NODE_ENV || 'development',
+    });
+  }
+
+  const masked = detected.key.length > 8
+    ? `${detected.key.slice(0, 4)}...${detected.key.slice(-4)}`
+    : '****';
+
+  try {
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(200).json({
+        success: false,
+        hasKey: true,
+        keySource: detected.source,
+        maskedKey: masked,
+        message: 'No se pudo instanciar el cliente GoogleGenAI.',
+      });
+    }
+
+    const startTime = Date.now();
+    const testResponse = await withTimeout(
+      ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: 'Ping test. Responde brevemente "OK".',
+      }),
+      6000
+    );
+    const latency = Date.now() - startTime;
+
+    return res.status(200).json({
+      success: true,
+      hasKey: true,
+      keySource: detected.source,
+      maskedKey: masked,
+      keyLength: detected.key.length,
+      latencyMs: latency,
+      testedModel: 'gemini-3.6-flash',
+      responseSample: testResponse.text?.trim() || 'OK',
+      message: 'Conexión con la API de Google Gemini verificada y operativa.',
+    });
+  } catch (err: any) {
+    console.warn('Gemini status check failed:', err);
+    return res.status(200).json({
+      success: false,
+      hasKey: true,
+      keySource: detected.source,
+      maskedKey: masked,
+      keyLength: detected.key.length,
+      errorName: err?.name || 'GeminiError',
+      errorMessage: err?.message || String(err),
+      errorCode: err?.status || err?.code || 'UNKNOWN_ERROR',
+      message: `Error al conectar con la API de Gemini: ${err?.message || 'Error desconocido'}. Revisa la validez de tu API Key o los límites de cuota.`,
+    });
+  }
+});
 
 // Helper to generate dynamic, tailored training plans when Gemini API is offline or falling back
 function buildCustomTrainingPlan(params: {
