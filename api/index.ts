@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Helper for timeout
-function withTimeout<T>(promise: Promise<T>, ms: number = 9500): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms: number = 25000): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -108,9 +108,52 @@ function generateBasketballTacticalResponse(
 * **Regla de oro:** Los minutos se ganan en el esfuerzo sin balón (balances defensivos, ayudas, tirarse a por balones divididos).`;
   }
 
-  if (players && players.length > 0) {
-    return `📋 **Diagnóstico de Plantilla (${players.length} Jugadoras)**\n\n` +
-      players.map((p: any) => `• **#${p.jerseyNumber ?? '?'} ${p.name || 'Jugadora'} (${p.role || 'Posición'})**: Fortalezas (*${Array.isArray(p.strengths) ? p.strengths.join(', ') : 'Compromiso'}*) | Por pulir (*${Array.isArray(p.areasToImprove) ? p.areasToImprove.join(', ') : 'Técnica'}*)`).join('\n');
+  // Pick & Roll / Screens / Bloqueos
+  if (msgLower.includes("pick") || msgLower.includes("bloqueo") || msgLower.includes("pantalla")) {
+    if (msgLower.includes("defen") || msgLower.includes("agresiv") || msgLower.includes("parar") || msgLower.includes("contra")) {
+      return `🛡️ **Defensa del Pick & Roll Agresivo en Baloncesto:**
+
+1. **Flash / Trap (2x1 al Manejador):**
+   - **Manejador:** La defensora del grande salta agresiva sobre el bote para forzar al base rival a cortar el dribling o pasar incómodo hacia atrás.
+   - **Recuperación:** La defensora del balón persigue y recupera por detrás mientras la defensora del grande frena la penetración.
+   - **Rotaciones del Lado Débil:** La jugadora en lado de ayuda (*Last Defender*) rota al corazón de la zona para cortar el pase a la caída (*Roll*) del pívot.
+
+2. **Hundimiento / Drop (Protección de Pintura):**
+   - La defensora del bloqueador se mantiene hundida a 1.5 - 2 metros, protegiendo el aro contra la caída y forzando tiros de media distancia de menor efectividad.
+
+3. **Next / Finta y Recuperación (*Stunt*):**
+   - La primera línea de pase amaga hacia el balón para frenar el avance del base sin perder a su tiradora.
+
+4. **Consigna de Pista:** La comunicación vocal debe ser inmediata: *"¡Bloqueo derecha!"* / *"¡Flash!"* / *"¡Cambio!"*.`;
+    }
+
+    return `🏀 **Sistemas de Pick & Roll y Bloqueos Directos:**
+
+1. **Lectura del Manejador:** Atacar el pie adelantado del defensor del grande. Si la defensa se hunde (*Drop*), castigar con tiro tras bote o pase picado al continuador (*Roll*).
+2. **Lectura del Bloqueador:** Fijar el contacto en ángulo de 45° con buena base y continuar explosivo al aro (*Roll*) o abrirse a 6.75m (*Pop*).
+3. **Espaciado (Spacing):** Las otras tres jugadoras deben mantener los pies detrás de la línea de 3 puntos en las esquinas y a 45° para generar líneas de pase limpias.`;
+  }
+
+  // Roster / Plantilla específica
+  if (
+    /\b(plantilla|jugadoras?|roster|dorsales?|fichas?)\b/i.test(msgLower) ||
+    (msgLower.includes("analiza") && msgLower.includes("jugadora"))
+  ) {
+    if (players && players.length > 0) {
+      return `📋 **Diagnóstico de Plantilla (${players.length} Jugadoras)**\n\n` +
+        players.map((p: any) => `• **#${p.jerseyNumber ?? '?'} ${p.name || 'Jugadora'} (${p.role || 'Posición'})**: Fortalezas (*${Array.isArray(p.strengths) ? p.strengths.join(', ') : 'Compromiso'}*) | Por pulir (*${Array.isArray(p.areasToImprove) ? p.areasToImprove.join(', ') : 'Técnica'}*)`).join('\n') +
+        `\n\n🎯 **Recomendación:** Organiza bloques de 20 minutos de trabajo por posiciones al inicio de cada sesión.`;
+    }
+  }
+
+  // Zonas / Defensas
+  if (msgLower.includes("zona") || msgLower.includes("defensa") || msgLower.includes("2-3") || msgLower.includes("1-3-1")) {
+    return `🛡️ **Claves Tácticas para Atacar y Defender en Zona:**\n\n• **Pase al poste alto:** El balón en la bombilla colapsa a la defensa y genera tiros abiertos en esquina (*corner*).\n• **Pase extra:** Mover el balón más rápido que los desplazamientos defensivos.\n• **Rebote defensivo:** Cierre obligatorio en zona (*Box Out*) por áreas asignadas.`;
+  }
+
+  // Tiros / Ejercicios
+  if (msgLower.includes("tiro") || msgLower.includes("ejercicio") || msgLower.includes("entrenamiento")) {
+    return `🎯 **Ejercicio de Tiro bajo presión:**\n\n1. **Estructura:** 3 filas en cabecera y 45°. Pase diagonal, recepción en 2 tiempos y tiro tras bote.\n2. **Objetivo:** 15 conversiones seguidas con defensor persiguiendo.\n3. **Clave técnica:** Codos alineados con el aro e impulso fluido de piernas.`;
   }
 
   return `🏀 **Recomendaciones Tácticas de CoachMind**\n\n• **En Ataque:** Fomenta la circulación con al menos 3 pases antes del primer tiro y ataca siempre el lado débil de la defensa.\n• **En Defensa:** Mantén la intensidad con comunicación constante en bloqueos y exige el cierre de rebote (*Box Out*).\n• **Transiciones:** Tras rebote o robo defensivo, busca el primer pase de apertura en menos de 1.5 segundos.`;
@@ -346,13 +389,24 @@ Respuestas concisas, estructuradas con viñetas, tono profesional, motivador y t
           : [];
 
         try {
-          const chat = ai.chats.create({
-            model: "gemini-3.6-flash",
-            history: formattedHistory,
-            config: { systemInstruction, temperature: 0.7 },
-          });
+          let response = null;
+          try {
+            const chat = ai.chats.create({
+              model: "gemini-3.6-flash",
+              history: formattedHistory,
+              config: { systemInstruction, temperature: 0.7 },
+            });
+            response = await withTimeout(chat.sendMessage({ message }), 20000);
+          } catch (m1Err) {
+            console.warn("Primary gemini-3.6-flash chat failed, trying gemini-3.8-flash:", m1Err);
+            const chatFallback = ai.chats.create({
+              model: "gemini-3.8-flash",
+              history: formattedHistory,
+              config: { systemInstruction, temperature: 0.7 },
+            });
+            response = await withTimeout(chatFallback.sendMessage({ message }), 20000);
+          }
 
-          const response = await withTimeout(chat.sendMessage({ message }), 10000);
           if (response && response.text) {
             return res.status(200).json({ success: true, text: response.text, reply: response.text });
           }

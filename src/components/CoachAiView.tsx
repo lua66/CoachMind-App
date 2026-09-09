@@ -90,13 +90,34 @@ Aquí tienes el plan de trabajo metodológico para corregir los 3 puntos clave q
 💡 *¿Quieres que diseñemos una sesión de entrenamiento completa de 90 minutos enfocada exclusivamente en estos aspectos?*`;
   }
 
-  // Pick & Roll / Screens
+  // Pick & Roll / Screens (Check before general words to avoid 'roll' matching 'rol')
   if (msgLower.includes('pick') || msgLower.includes('bloqueo') || msgLower.includes('pantalla')) {
+    if (msgLower.includes('defen') || msgLower.includes('agresiv') || msgLower.includes('parar') || msgLower.includes('contra')) {
+      return `🛡️ **Defensa del Pick & Roll Agresivo en Baloncesto:**
+
+1. **Flash / Trap (2x1 al Manejador):**
+   - **Manejador:** La defensora del grande salta agresiva sobre el bote para forzar al base rival a cortar el dribling o pasar incómodo hacia atrás.
+   - **Recuperación:** La defensora del balón persigue y recupera por detrás mientras la defensora del grande frena la penetración.
+   - **Rotaciones del Lado Débil:** La jugadora en lado de ayuda (*Last Defender*) rota al corazón de la zona para cortar el pase a la caída (*Roll*) del pívot.
+
+2. **Hundimiento / Drop (Protección de Pintura):**
+   - La defensora del bloqueador se mantiene hundida a 1.5 - 2 metros, protegiendo el aro contra la caída y forzando tiros de media distancia de menor efectividad.
+
+3. **Next / Finta y Recuperación (*Stunt*):**
+   - La primera línea de pase amaga hacia el balón para frenar el avance del base sin perder a su tiradora.
+
+4. **Consigna de Pista:** La comunicación vocal debe ser inmediata: *"¡Bloqueo derecha!"* / *"¡Flash!"* / *"¡Cambio!"*.`;
+    }
+
     return `🏀 **Sistemas de Pick & Roll y Bloqueos Directos**\n\n1. **Lectura del Manejador:** Atacar el pie adelantado del defensor del grande. Si la defensa se hunde (*Drop*), castigar con tiro tras bote o pase picado al continuador.\n2. **Lectura del Bloqueador:** Fijar el contacto en ángulo de 45° con buena base y continuar explosivo al aro (*Roll*) o abrirse a 6.75m (*Pop*).\n3. **Espaciado (Spacing):** Las otras tres jugadoras deben mantener los pies detrás de la línea de 3 puntos en las esquinas y a 45° para generar líneas de pase limpias.`;
   }
 
   // Roster / Players
-  if (msgLower.includes('jugadora') || msgLower.includes('plantilla') || msgLower.includes('rol')) {
+  if (
+    /\b(plantilla|jugadoras?|roster|dorsales?|fichas?)\b/i.test(msgLower) ||
+    (msgLower.includes('analiza') && msgLower.includes('jugadora')) ||
+    (msgLower.includes('rol') && !msgLower.includes('roll'))
+  ) {
     if (players && players.length > 0) {
       return `📋 **Diagnóstico de Plantilla (${players.length} Jugadoras Registradas)**\n\n` +
         players.map((p: any) => `• **#${p.jerseyNumber ?? '?'} ${p.name || 'Jugadora'} (${p.role || 'Posición'})**: Fortalezas (*${Array.isArray(p.strengths) ? p.strengths.join(', ') : 'Compromiso'}*) | Por pulir (*${Array.isArray(p.areasToImprove) ? p.areasToImprove.join(', ') : 'Técnica'}*)`).join('\n') +

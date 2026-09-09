@@ -20,7 +20,7 @@ const PORT = 3000;
 app.use(express.json({ limit: '10mb' }));
 
 // Helper function for API timeouts
-function withTimeout<T>(promise: Promise<T>, ms: number = 7500): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms: number = 25000): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -703,18 +703,24 @@ Responde a todas las preguntas y propuestas tácticas adaptándote 100% a la fil
       }
 
       try {
-        const chat = ai.chats.create({
-          model: 'gemini-3.8-flash',
-          history: formattedHistory,
-          config: {
-            systemInstruction,
-          },
-        });
+        let response = null;
+        try {
+          const chat = ai.chats.create({
+            model: 'gemini-3.6-flash',
+            history: formattedHistory,
+            config: { systemInstruction },
+          });
+          response = await withTimeout(chat.sendMessage({ message }), 15000);
+        } catch (mErr) {
+          console.warn('Primary model gemini-3.6-flash failed, trying gemini-3.8-flash:', mErr);
+          const chatFallback = ai.chats.create({
+            model: 'gemini-3.8-flash',
+            history: formattedHistory,
+            config: { systemInstruction },
+          });
+          response = await withTimeout(chatFallback.sendMessage({ message }), 15000);
+        }
 
-        const response = await withTimeout(
-          chat.sendMessage({ message }),
-          7500
-        );
         if (response && response.text) {
           return res.json({ success: true, text: response.text, reply: response.text });
         }
@@ -727,7 +733,40 @@ Responde a todas las preguntas y propuestas tácticas adaptándote 100% a la fil
     const userLower = (message || '').toLowerCase();
     let reply = '';
 
-    if (coachPhilosophy && (coachPhilosophy.playStyle || coachPhilosophy.offensiveFocus || coachPhilosophy.defensiveFocus)) {
+    // 1. Pick & Roll / Bloqueos / Pantallas (Checked FIRST to avoid collision with 'roll')
+    if (userLower.includes('pick') || userLower.includes('bloqueo') || userLower.includes('pantalla')) {
+      if (userLower.includes('defen') || userLower.includes('agresiv') || userLower.includes('parar') || userLower.includes('contra')) {
+        reply = `🛡️ **Defensa del Pick & Roll Agresivo en Baloncesto:**
+
+1. **Flash / Trap (2x1 al Balón):**
+   - **Manejador:** La defensora del grande sale agresiva saltando al 2x1 para cortar el bote e impedir que el base rival vea el pase o tire.
+   - **Defensora del bloqueador:** La defensora del grande frena la trayectoria del base mientras la defensora del balón recupera por detrás.
+   - **Rotaciones del Lado Débil:** La jugadora en el lado débil (*Last Defender*) es responsable de cortar el pase picado a la caída (*Roll*) del pívot al aro.
+
+2. **Hundimiento / Drop (Protección de Pintura):**
+   - La defensora del bloqueador se mantiene a 1.5 - 2 metros en la línea de tiros libres, protegiendo el aro de la caída y obligando al base a tirar un tiro largo de 2 puntos en suspensión.
+
+3. **Next / Ayuda y Recuperación Temprana:**
+   - La jugadora de la primera línea de pase amaga (*Stunt*) hacia el manejador para forzar el bote hacia atrás sin perder su marca.
+
+4. **Regla Clave de Pista:** Comunicación temprana antes del contacto: *"¡Bloqueo derecha!"* / *"¡Flash!"* / *"¡Cambio!"*.`;
+      } else {
+        reply = `🏀 **Estrategia en Ataque y Defensa de Pick & Roll:**
+
+1. **En Ataque:** El base debe atacar el hombro exterior de la defensora del bloqueador. Si la defensora flota (*Drop*), castiga con tiro tras bote o tiro flotante; si saltan al 2x1 (*Trap*), pase rápido de desahogo a la continuación del pívot (*Short Roll*) o esquina contraria.
+2. **En Defensa:** Exige comunicación anticipada de la defensora del grande. Si el rival es tirador, pasar el bloqueo por delante (*Over*) con ayuda agresiva (*Show/Flash*); si no es tirador, pasar por detrás (*Under*).`;
+      }
+    } else if (
+      /\b(plantilla|jugadoras?|roster|dorsales?|fichas?|minutos?)\b/i.test(userLower) ||
+      (userLower.includes('pretemporada') && userLower.includes('equipo')) ||
+      (userLower.includes('analiza') && userLower.includes('jugadora'))
+    ) {
+      reply = buildRosterAnalysisReply(players || [], message, coachPhilosophy);
+    } else if (userLower.includes('zona') || userLower.includes('defensa presionante') || userLower.includes('2-3') || userLower.includes('1-3-1')) {
+      reply = `🛡️ **Claves para atacar y defender Zonas (2-3 / 1-3-1):**\n\n• **Pase al poste alto:** El balón en la bombilla colapsa a las dos defensoras superiores y abre el pase a la esquina (*corner*).\n• **Pase extra:** Mover el balón más rápido que el desplazamiento defensivo.\n• **Rebote ofensivo:** Cargar el lado débil desde la posición 3 o 4.`;
+    } else if (userLower.includes('tiro') || userLower.includes('ejercicio') || userLower.includes('entrenamiento')) {
+      reply = `🎯 **Ejercicio de Tiro bajo presión:**\n\n1. **Mecánica:** 3 filas en cabecera y aleros. Tras pase en diagonal, sprint a la esquina, recepción en 2 tiempos y tiro tras bote.\n2. **Objetivo:** Anotar 15 tiros consecutivos por estación.\n3. **Clave:** Codos alineados con el aro e impulso de piernas constante.`;
+    } else if (coachPhilosophy && (coachPhilosophy.playStyle || coachPhilosophy.offensiveFocus || coachPhilosophy.defensiveFocus)) {
       reply = `🏀 **Respuesta Personalizada según Tu Filosofía:**\n\n` +
         `Para abordar tu consulta ("${message}") aplicando tus directrices:\n\n` +
         `• **Estilo de Juego (${coachPhilosophy.playStyle || 'Ritmo alto y dinámico'}):** Exige máxima concentración desde el salto inicial. Mantén el ritmo alto pero bajo control táctico.\n` +
@@ -736,23 +775,6 @@ Responde a todas las preguntas y propuestas tácticas adaptándote 100% a la fil
         `• **Objetivo del Encuentro:** ${coachPhilosophy.matchGoals || 'Cumplir el plan de partido y mantener la identidad del equipo.'}\n` +
         `${coachPhilosophy.additionalNotes ? `• **Nota del Entrenador:** ${coachPhilosophy.additionalNotes}\n` : ''}\n` +
         `💡 *Consejo de CoachMind:* Adapta estas claves a las rotaciones en el primer tiempo para mantener la frescura física del equipo.`;
-    } else if (
-      userLower.includes('rol') ||
-      userLower.includes('roll') ||
-      userLower.includes('pretemporada') ||
-      userLower.includes('jugadora') ||
-      userLower.includes('perfil') ||
-      userLower.includes('analiza') ||
-      userLower.includes('fortaleza') ||
-      userLower.includes('debilidad')
-    ) {
-      reply = buildRosterAnalysisReply(players || [], message, coachPhilosophy);
-    } else if (userLower.includes('pick') || userLower.includes('bloqueo')) {
-      reply = `🏀 **Estrategia en Pick & Roll:**\n\n1. **Ataque:** El base debe atacar el hombro del defensor del bloqueador. Si el defensor del grande flota, busca el *Pick & Pop* o la penetración agresiva.\n2. **Defensa:** Recomiendo comunicación clara (*"Bloqueo derecha"*). Si el rival es gran tirador, apliquen *Flash* o *Trap* agresivo; si ataca la pintura, pasen por detrás con hundimiento (*Drop*).`;
-    } else if (userLower.includes('zona') || userLower.includes('defensa')) {
-      reply = `🛡️ **Claves para atacar la Zona 2-3:**\n\n• **Pase al poste alto:** El balón en la bombilla colapsa a las dos defensoras superiores y abre el pase a la esquina (*corner*).\n• **Pase extra:** Mover el balón más rápido que el desplazamiento defensivo.\n• **Rebote ofensivo:** Cargar el lado débil desde la posición 3 o 4.`;
-    } else if (userLower.includes('tiro') || userLower.includes('ejercicio')) {
-      reply = `🎯 **Ejercicio de Tiro bajo presión:**\n\n1. **Mecánica:** 3 filas en cabecera y alerados. Tras pase en diagonal, sprint a la esquina, recepción perfecta en 2 tiempos y tiro tras bote.\n2. **Objetivo:** Anotar 15 tiros consecutivos por estación.\n3. **Clave:** Codos alineados con el aro e impulso de piernas constante.`;
     } else {
       reply = `¡Excelente consulta de baloncesto!\n\nPara maximizar el rendimiento táctico de tu equipo:\n• **En Ataque:** Mantén un *spacing* de al menos 4-5 metros entre jugadoras y busca siempre la ventaja en el lado débil tras el primer pase.\n• **En Defensa:** Exige comunicación en cada bloqueo directo e indirecto y prioriza el *box out* (cierre de rebote) tras cada lanzamiento.\n\n¿Quieres que profundicemos en algún sistema en particular (Pick & Roll, transición rápida o defensa presionante)?`;
     }
