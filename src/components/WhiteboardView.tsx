@@ -444,6 +444,7 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const lastPlacementTimeRef = useRef<number>(0);
 
   // Helper tool color
   const getToolColor = (tool: DrawTool): string => {
@@ -686,85 +687,117 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
     return positions;
   }, [isPlaying, progress, frames, activeAnimFrameIdx, localProgress]);
 
-  const getRelativeCoords = (e: React.MouseEvent | React.TouchEvent): Point | null => {
+  const getRelativeCoords = (
+    e: React.PointerEvent<HTMLDivElement> | React.MouseEvent | React.TouchEvent | PointerEvent | TouchEvent
+  ): Point | null => {
     if (!containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    let clientX = 0;
+    let clientY = 0;
+
+    if ('clientX' in e && typeof e.clientX === 'number') {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    } else if ('touches' in e && (e as any).touches && (e as any).touches.length > 0) {
+      clientX = (e as any).touches[0].clientX;
+      clientY = (e as any).touches[0].clientY;
+    } else {
+      return null;
+    }
 
     const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
     return { x, y };
   };
 
-  const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isPlaying) return;
+
+    // Prevent default browser touch gestures (page scrolling, zooming, selection)
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    // Capture pointer so drawing or dragging stays 100% stabilized on iPad/touch
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {}
 
     const pt = getRelativeCoords(e);
     if (!pt) return;
 
-    // Handle placement click
-    if (activePlacementMode === 'playerA') {
-      const playerNum = nextPlayerANumber > 15 ? ((nextPlayerANumber - 1) % 15) + 1 : nextPlayerANumber;
-      const newToken: TacticalToken = {
-        id: `a-${Date.now()}`,
-        type: 'playerA',
-        label: `${playerNum}`,
-        x: pt.x,
-        y: pt.y,
-        color: '#2563EB',
-      };
-      const updated = [...tokens, newToken];
-      syncFrames(updated, paths);
-      setBaseTokens(updated);
-      setNextPlayerANumber((prev) => (prev >= 15 ? 1 : prev + 1));
-      return;
-    }
+    // Handle placement click with debounce against duplicate touch/click firing
+    if (activePlacementMode !== 'none') {
+      const now = Date.now();
+      if (now - lastPlacementTimeRef.current < 250) {
+        return; // Ignore duplicate touch events within 250ms
+      }
+      lastPlacementTimeRef.current = now;
 
-    if (activePlacementMode === 'playerB') {
-      const playerNum = nextPlayerBNumber > 15 ? ((nextPlayerBNumber - 1) % 15) + 1 : nextPlayerBNumber;
-      const newToken: TacticalToken = {
-        id: `b-${Date.now()}`,
-        type: 'playerB',
-        label: `${playerNum}`,
-        x: pt.x,
-        y: pt.y,
-        color: '#DC2626',
-      };
-      const updated = [...tokens, newToken];
-      syncFrames(updated, paths);
-      setBaseTokens(updated);
-      setNextPlayerBNumber((prev) => (prev >= 15 ? 1 : prev + 1));
-      return;
-    }
+      if (activePlacementMode === 'playerA') {
+        const playerNum = nextPlayerANumber > 15 ? ((nextPlayerANumber - 1) % 15) + 1 : nextPlayerANumber;
+        const newToken: TacticalToken = {
+          id: `a-${Date.now()}`,
+          type: 'playerA',
+          label: `${playerNum}`,
+          x: pt.x,
+          y: pt.y,
+          color: '#2563EB',
+        };
+        const updated = [...tokens, newToken];
+        syncFrames(updated, paths);
+        setBaseTokens(updated);
+        setNextPlayerANumber((prev) => (prev >= 15 ? 1 : prev + 1));
+        return;
+      }
 
-    if (activePlacementMode === 'ball') {
-      const newToken: TacticalToken = {
-        id: `ball-${Date.now()}`,
-        type: 'ball',
-        label: '🏀',
-        x: pt.x,
-        y: pt.y,
-      };
-      const updated = [...tokens, newToken];
-      syncFrames(updated, paths);
-      setBaseTokens(updated);
-      return;
-    }
+      if (activePlacementMode === 'playerB') {
+        const playerNum = nextPlayerBNumber > 15 ? ((nextPlayerBNumber - 1) % 15) + 1 : nextPlayerBNumber;
+        const newToken: TacticalToken = {
+          id: `b-${Date.now()}`,
+          type: 'playerB',
+          label: `${playerNum}`,
+          x: pt.x,
+          y: pt.y,
+          color: '#DC2626',
+        };
+        const updated = [...tokens, newToken];
+        syncFrames(updated, paths);
+        setBaseTokens(updated);
+        setNextPlayerBNumber((prev) => (prev >= 15 ? 1 : prev + 1));
+        return;
+      }
 
-    if (activePlacementMode === 'cone') {
-      const newToken: TacticalToken = {
-        id: `cone-${Date.now()}`,
-        type: 'cone',
-        label: '▲',
-        x: pt.x,
-        y: pt.y,
-        color: '#F59E0B',
-      };
-      const updated = [...tokens, newToken];
-      syncFrames(updated, paths);
-      setBaseTokens(updated);
-      return;
+      if (activePlacementMode === 'ball') {
+        const newToken: TacticalToken = {
+          id: `ball-${Date.now()}`,
+          type: 'ball',
+          label: '🏀',
+          x: pt.x,
+          y: pt.y,
+        };
+        const updated = [...tokens, newToken];
+        syncFrames(updated, paths);
+        setBaseTokens(updated);
+        return;
+      }
+
+      if (activePlacementMode === 'cone') {
+        const newToken: TacticalToken = {
+          id: `cone-${Date.now()}`,
+          type: 'cone',
+          label: '▲',
+          x: pt.x,
+          y: pt.y,
+          color: '#F59E0B',
+        };
+        const updated = [...tokens, newToken];
+        syncFrames(updated, paths);
+        setBaseTokens(updated);
+        return;
+      }
     }
 
     // Drawing tool mode
@@ -782,8 +815,16 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
     }
   };
 
-  const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (activeTokenId && selectedTool === 'select' && activePlacementMode === 'none' && !isPlaying) {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isPlaying) return;
+
+    if (activeTokenId || isDrawing) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    }
+
+    if (activeTokenId && selectedTool === 'select' && activePlacementMode === 'none') {
       const pt = getRelativeCoords(e);
       if (pt) {
         const tokenToMove = tokens.find((t) => t.id === activeTokenId);
@@ -831,7 +872,13 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
     }
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
+
     if (activeTokenId) {
       setActiveTokenId(null);
     }
@@ -1984,13 +2031,17 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
           {/* Court Board Container */}
           <div
             ref={containerRef}
-            onMouseDown={handlePointerDown}
-            onMouseMove={handlePointerMove}
-            onMouseUp={handlePointerUp}
-            onTouchStart={handlePointerDown}
-            onTouchMove={handlePointerMove}
-            onTouchEnd={handlePointerUp}
-            className="w-full aspect-[16/10] bg-[#1E293B] rounded-2xl relative overflow-hidden border-2 border-slate-700 cursor-crosshair shadow-inner"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className="w-full aspect-[16/10] bg-[#1E293B] rounded-2xl relative overflow-hidden border-2 border-slate-700 cursor-crosshair shadow-inner tactical-board-surface select-none touch-none"
+            style={{
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+            }}
           >
             {/* FIBA Basketball Court Lines SVG */}
             <svg
@@ -2304,26 +2355,46 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
               return (
                 <div
                   key={token.id}
-                  onMouseDown={(e) => {
+                  onPointerDown={(e) => {
                     if (isPlaying) return;
                     if (selectedTool === 'select' && activePlacementMode === 'none') {
                       e.stopPropagation();
+                      if (e.cancelable) e.preventDefault();
                       setActiveTokenId(token.id);
+                      try {
+                        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                      } catch (err) {}
                     }
                   }}
-                  onTouchStart={(e) => {
-                    if (isPlaying) return;
-                    if (selectedTool === 'select' && activePlacementMode === 'none') {
-                      e.stopPropagation();
-                      setActiveTokenId(token.id);
+                  onPointerUp={(e) => {
+                    if (activeTokenId === token.id) {
+                      setActiveTokenId(null);
+                      try {
+                        if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
+                          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                        }
+                      } catch (err) {}
+                    }
+                  }}
+                  onPointerCancel={(e) => {
+                    if (activeTokenId === token.id) {
+                      setActiveTokenId(null);
+                      try {
+                        if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
+                          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                        }
+                      } catch (err) {}
                     }
                   }}
                   style={{
                     left: `${currentX}%`,
                     top: `${currentY}%`,
                     transform: 'translate(-50%, -50%)',
+                    touchAction: 'none',
+                    WebkitUserSelect: 'none',
+                    userSelect: 'none',
                   }}
-                  className={`absolute w-8 h-8 rounded-full flex items-center justify-center font-extrabold text-xs shadow-lg transition-transform ${
+                  className={`absolute w-8 h-8 rounded-full flex items-center justify-center font-extrabold text-xs shadow-lg transition-transform select-none touch-none ${
                     isPlaying ? 'cursor-default transition-all duration-75' : 'cursor-grab active:cursor-grabbing'
                   } ${activeTokenId === token.id ? 'scale-125 z-30 ring-2 ring-white' : 'z-20'}`}
                 >

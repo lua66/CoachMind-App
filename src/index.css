@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+/* Canvas & Tactical Board stabilization for iPad / Tablets / Touchscreens */
+.tactical-board-surface {
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  overscroll-behavior: contain !important;
+}
+
+/* Prevent accidental iOS rubber-band bounce when interacting with board */
+.no-touch-bounce {
+  touch-action: pan-y pinch-zoom;
+}

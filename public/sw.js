@@ -1,5 +1,5 @@
 // Service Worker avanzado para CoachMind Baloncesto PWA
-const CACHE_NAME = 'coachmind-v2';
+const CACHE_NAME = 'coachmind-v3-gemini-live';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -24,13 +24,14 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activación
+// Activación y limpieza de cachés antiguas
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('Borrando caché antigua:', key);
             return caches.delete(key);
           }
         })
@@ -39,8 +40,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Peticiones Fetch (Network first con fallback a caché)
+// Peticiones Fetch (Network first, nunca cachear /api/)
 self.addEventListener('fetch', (event) => {
+  // Ignorar peticiones a la API para que siempre vayan al servidor en vivo
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
   // Ignorar peticiones que no sean GET o sean de extensiones
   if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
     return;
