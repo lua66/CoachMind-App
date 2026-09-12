@@ -1975,10 +1975,14 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
 
         {/* The Main Table with Exact Minute Pills */}
         <div className="overflow-x-auto pb-4 custom-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[750px]">
+          <table
+            className={`w-full text-left border-collapse ${
+              focusQuarterMode ? 'min-w-[420px] sm:min-w-full' : 'min-w-[680px]'
+            }`}
+          >
             <thead>
               <tr className="border-b-2 border-slate-200 text-xs font-black text-slate-700">
-                <th className="py-3 px-3 w-56 sticky left-0 bg-white z-20 shadow-r">
+                <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-32 sm:w-56 min-w-[115px] sm:min-w-[210px] max-w-[135px] sm:max-w-none sticky left-0 bg-white z-20 border-r border-slate-200 shadow-xs">
                   Jugadora & Estado
                 </th>
 
@@ -1987,7 +1991,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                   quartersList.map((q, qIdx) => (
                     <th
                       key={q}
-                      className={`py-3 px-3 text-center border-l border-slate-200 ${
+                      className={`py-2.5 sm:py-3 px-2 sm:px-3 text-center border-l border-slate-200 ${
                         activeQuarter === q
                           ? 'bg-amber-50/70 text-amber-900 font-extrabold'
                           : 'bg-slate-50/50'
@@ -2005,18 +2009,18 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                     </th>
                   ))
                 ) : (
-                  <th className="py-3 px-3 text-center border-l border-slate-200 bg-amber-50 text-amber-900 font-black">
-                    <div className="flex items-center justify-center gap-2 text-sm">
-                      <Flame className="w-4 h-4 text-amber-500" />
+                  <th className="py-2.5 sm:py-3 px-2 sm:px-3 text-center border-l border-slate-200 bg-amber-50 text-amber-900 font-black">
+                    <div className="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm flex-wrap sm:flex-nowrap">
+                      <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500 shrink-0" />
                       <span>{activeQuarter === 'PR' ? 'PRÓRROGA' : `CUARTO EN JUEGO: ${activeQuarter}`}</span>
-                      <span className="text-xs bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">
-                        Toca los minutos jugados (0' a {quarterMinutes}')
+                      <span className="text-[10px] sm:text-xs bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                        0' a {quarterMinutes}'
                       </span>
                     </div>
                   </th>
                 )}
 
-                <th className="py-3 px-4 text-right w-36 border-l border-slate-200 bg-slate-50/50">
+                <th className="py-2.5 sm:py-3 px-2 sm:px-4 text-right w-20 sm:w-36 border-l border-slate-200 bg-slate-50/50">
                   Total
                 </th>
               </tr>
@@ -2042,30 +2046,30 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                     }`}
                   >
                     {/* Player Info & OnCourt Toggle */}
-                    <td className="py-3 px-3 sticky left-0 bg-white z-10 shadow-r">
-                      <div className="flex items-center gap-2.5">
+                    <td className="py-2 sm:py-3 px-2 sm:px-3 w-32 sm:w-56 min-w-[115px] sm:min-w-[210px] max-w-[135px] sm:max-w-none sticky left-0 bg-white z-10 border-r border-slate-200 shadow-xs">
+                      <div className="flex items-center gap-1.5 sm:gap-2.5">
                         <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0 ${cfg.bg}`}
+                          className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center font-black text-xs sm:text-sm text-white shadow-xs shrink-0 ${cfg.bg}`}
                         >
                           {player.jerseyNumber}
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-extrabold text-sm text-slate-900 truncate">
+                          <div className="flex items-center gap-1">
+                            <span className="font-extrabold text-xs sm:text-sm text-slate-900 truncate max-w-[65px] sm:max-w-[130px]" title={player.name}>
                               {player.name}
                             </span>
                             {player.isStartingFive && (
                               <Star
-                                className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0"
+                                className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-400 shrink-0"
                                 title="Titular (Quinteto Inicial)"
                               />
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex items-center gap-1 mt-0.5 flex-wrap sm:flex-nowrap">
                             <span
-                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${cfg.badge}`}
+                              className={`hidden sm:inline-block text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 rounded border ${cfg.badge}`}
                             >
                               {player.role}
                             </span>
@@ -2074,7 +2078,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                             <button
                               type="button"
                               onClick={() => handleToggleOnCourt(player.id)}
-                              className={`text-[10px] font-black px-2 py-0.5 rounded-full transition-all cursor-pointer ${
+                              className={`text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 rounded-full transition-all cursor-pointer ${
                                 player.onCourt
                                   ? 'bg-emerald-500 text-white shadow-xs animate-pulse'
                                   : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
@@ -2172,7 +2176,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                       })
                     ) : (
                       /* Focus Active Quarter Mode: Big Minute Buttons */
-                      <td className="py-4 px-4 border-l border-slate-200 bg-amber-50/20">
+                      <td className="py-2.5 sm:py-4 px-2 sm:px-4 border-l border-slate-200 bg-amber-50/20">
                         {(() => {
                           const events = player.quarterEvents?.[activeQuarter] || [];
                           const activeMins = getActiveMinutesList(events, quarterMinutes);
@@ -2180,8 +2184,8 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                           const qMinsPlayed = calculateQuarterMinutesPlayed(events, quarterMinutes);
 
                           return (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
                                 {Array.from({ length: quarterMinutes + 1 }).map((_, mIdx) => {
                                   const isEvent = events.includes(mIdx);
                                   const eventIndex = events.indexOf(mIdx);
@@ -2196,7 +2200,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                                       onClick={() =>
                                         handleToggleMinutePill(player.id, activeQuarter, mIdx)
                                       }
-                                      className={`w-9 h-10 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                                      className={`w-7 h-8 sm:w-9 sm:h-10 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer ${
                                         isEntry
                                           ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-300 scale-105'
                                           : isExit
@@ -2212,23 +2216,23 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                                 })}
                               </div>
 
-                              <div className="flex items-center justify-between text-xs pt-1">
-                                <span className="font-extrabold text-slate-800">
+                              <div className="flex items-center justify-between text-xs pt-1 flex-wrap gap-1">
+                                <span className="font-extrabold text-slate-800 text-[11px] sm:text-xs">
                                   {rangesStr} · {qMinsPlayed} min
                                 </span>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                                   <button
                                     type="button"
                                     onClick={() => handleSetFullQuarter(player.id, activeQuarter)}
-                                    className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg cursor-pointer"
+                                    className="text-[10px] sm:text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1.5 sm:px-2 py-0.5 rounded-lg cursor-pointer"
                                   >
                                     Todo (0-{quarterMinutes}')
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleClearQuarter(player.id, activeQuarter)}
-                                    className="text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-lg cursor-pointer"
+                                    className="text-[10px] sm:text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-1.5 sm:px-2 py-0.5 rounded-lg cursor-pointer"
                                   >
                                     Borrar
                                   </button>
@@ -2241,7 +2245,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                                         currentText: rangesStr === 'Sin minutos' ? '' : rangesStr,
                                       })
                                     }
-                                    className="text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg flex items-center gap-1 cursor-pointer"
+                                    className="text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 sm:px-2 py-0.5 rounded-lg flex items-center gap-1 cursor-pointer"
                                   >
                                     <Edit3 className="w-3 h-3" /> Escribir
                                   </button>
@@ -2254,9 +2258,9 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                     )}
 
                     {/* Total Time & Progress */}
-                    <td className="py-3 px-4 text-right border-l border-slate-200 bg-slate-50/50">
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 text-right border-l border-slate-200 bg-slate-50/50">
                       <div className="space-y-1">
-                        <div className="font-black text-sm text-slate-900 tabular-nums">
+                        <div className="font-black text-xs sm:text-sm text-slate-900 tabular-nums">
                           {totalMins} min
                         </div>
                         <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
@@ -2272,7 +2276,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                           />
                         </div>
                         <span
-                          className={`text-[10px] font-bold block ${
+                          className={`text-[9px] sm:text-[10px] font-bold block ${
                             isUnplayed
                               ? 'text-red-600 font-extrabold'
                               : isLow
@@ -2280,7 +2284,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                               : 'text-emerald-700'
                           }`}
                         >
-                          {isUnplayed ? '🔴 Sin jugar' : isLow ? '🟡 Pocos min' : `${pct}%`}
+                          {isUnplayed ? '🔴 0 min' : isLow ? '🟡 Pocos' : `${pct}%`}
                         </span>
                       </div>
                     </td>
