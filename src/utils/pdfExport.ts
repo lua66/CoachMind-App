@@ -4,7 +4,11 @@ import { SavedTraining, DrillItem, TrainingReviewReport, TacticalDiagramElement 
 /**
  * Creates a clean, self-contained SVG string representing the basketball court and all tactical elements.
  */
-function createDrillSvgString(drill: DrillItem): string {
+function createDrillSvgString(drill: {
+  courtType?: 'full' | 'half';
+  diagramElements?: TacticalDiagramElement[];
+  diagramDataUrl?: string;
+}): string {
   const courtType = drill.courtType || 'half';
   const elements = drill.diagramElements || [];
 
@@ -171,7 +175,11 @@ function createDrillSvgString(drill: DrillItem): string {
 /**
  * Converts a DrillItem's diagram into a high-resolution PNG Data URL.
  */
-export const renderDrillDiagramToPng = async (drill: DrillItem): Promise<string> => {
+export const renderDrillDiagramToPng = async (drill: {
+  courtType?: 'full' | 'half';
+  diagramElements?: TacticalDiagramElement[];
+  diagramDataUrl?: string;
+}): Promise<string> => {
   if (drill.diagramDataUrl && drill.diagramDataUrl.startsWith('data:image/png;base64,')) {
     return drill.diagramDataUrl;
   }
@@ -477,11 +485,76 @@ export const exportTrainingSessionToPdf = async (training: SavedTraining): Promi
           doc.setDrawColor(51, 65, 85);
           doc.setLineWidth(0.3);
           doc.roundedRect(boardX, boardY, boardWidth, boardHeight, 1, 1, 'D');
+
+          // If variants exist, add label on diagram
+          if (drill.diagrams && drill.diagrams.length > 1) {
+            doc.setFillColor(15, 23, 42);
+            doc.roundedRect(boardX + 1.5, boardY + boardHeight - 5.5, 30, 4, 1, 1, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(5.5);
+            doc.setTextColor(251, 146, 60);
+            doc.text(drill.diagrams[0]?.title || 'Pizarra Principal', boardX + 3, boardY + boardHeight - 2.8);
+          }
         } catch (imgErr) {
           console.warn('Could not add drill diagram image to PDF:', imgErr);
         }
 
-        y += totalCardHeight + 4;
+        y += totalCardHeight + 3;
+
+        // Extra Variant Boards if any
+        if (drill.diagrams && drill.diagrams.length > 1) {
+          for (let vIdx = 1; vIdx < drill.diagrams.length; vIdx++) {
+            const variant = drill.diagrams[vIdx];
+            const variantPng = await renderDrillDiagramToPng(variant);
+            const variantCardHeight = 48;
+            checkPageBreak(variantCardHeight + 4);
+
+            const vCardStartY = y;
+            // Variant container
+            doc.setFillColor(250, 250, 252);
+            doc.setDrawColor(226, 232, 240);
+            doc.roundedRect(margin, vCardStartY, contentWidth, variantCardHeight, 2, 2, 'FD');
+
+            // Variant badge & title
+            doc.setFillColor(241, 245, 249);
+            doc.roundedRect(margin, vCardStartY, contentWidth, 7, 2, 2, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(234, 88, 12);
+            const vTitle = `Variante ${vIdx}: ${variant.title || 'Progresión táctica'}`;
+            doc.text(vTitle.length > 55 ? vTitle.slice(0, 52) + '...' : vTitle, margin + 4, vCardStartY + 5);
+
+            // Tactical board on left
+            const vBoardWidth = 62;
+            const vBoardHeight = 37.5;
+            const vBoardX = margin + 4;
+            const vBoardY = vCardStartY + 8.5;
+
+            try {
+              doc.addImage(variantPng, 'PNG', vBoardX, vBoardY, vBoardWidth, vBoardHeight);
+              doc.setDrawColor(51, 65, 85);
+              doc.setLineWidth(0.3);
+              doc.roundedRect(vBoardX, vBoardY, vBoardWidth, vBoardHeight, 1, 1, 'D');
+            } catch (err) {
+              console.warn('Could not add variant diagram to PDF:', err);
+            }
+
+            // Variant description / info on right
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(15, 23, 42);
+            doc.text('Detalles de la Variante:', margin + vBoardWidth + 8, vCardStartY + 14);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(71, 85, 105);
+            doc.text('• Continuación y progresión táctica del ejercicio.', margin + vBoardWidth + 8, vCardStartY + 19);
+            doc.text(`• Tipo de Pista: ${variant.courtType === 'full' ? 'Pista Completa' : 'Media Pista'}`, margin + vBoardWidth + 8, vCardStartY + 23.5);
+            doc.text(`• Elementos tácticos en pista: ${(variant.diagramElements || []).length} fichas/trazos`, margin + vBoardWidth + 8, vCardStartY + 28);
+
+            y += variantCardHeight + 3;
+          }
+        }
       }
 
       y += 2;

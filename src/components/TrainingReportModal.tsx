@@ -31,6 +31,105 @@ interface TrainingReportModalProps {
   onClose: () => void;
 }
 
+interface DrillDiagramViewerProps {
+  drill: DrillItem;
+}
+
+const DrillDiagramViewer: React.FC<DrillDiagramViewerProps> = ({ drill }) => {
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+
+  const variants =
+    drill.diagrams && drill.diagrams.length > 0
+      ? drill.diagrams
+      : drill.diagramDataUrl
+      ? [
+          {
+            id: 'diag-1',
+            title: 'Pizarra Principal',
+            courtType: drill.courtType || 'half',
+            diagramDataUrl: drill.diagramDataUrl,
+            diagramElements: drill.diagramElements || [],
+          },
+        ]
+      : [];
+
+  const currentVariant = variants[selectedVariantIdx] || variants[0];
+
+  if (variants.length === 0) {
+    return (
+      <div className="space-y-1">
+        <h4 className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+          <Layers className="w-3.5 h-3.5" />
+          <span>Pizarra Táctica</span>
+        </h4>
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 aspect-[16/10] flex flex-col items-center justify-center text-center p-3 text-slate-400">
+          <span className="text-xl mb-1">📋</span>
+          <span className="text-[11px]">Sin diagrama dibujado</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+          <Layers className="w-3.5 h-3.5 text-orange-500" />
+          <span>Pizarra Táctica {variants.length > 1 ? `(${variants.length} variantes)` : ''}</span>
+        </h4>
+
+        {variants.length > 1 && (
+          <span className="text-[10px] text-orange-600 font-extrabold bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+            {selectedVariantIdx + 1} de {variants.length}
+          </span>
+        )}
+      </div>
+
+      {/* If multiple variants, show selector tabs */}
+      {variants.length > 1 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          {variants.map((v, vIdx) => (
+            <button
+              key={v.id || vIdx}
+              type="button"
+              onClick={() => setSelectedVariantIdx(vIdx)}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer border ${
+                selectedVariantIdx === vIdx
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm font-black'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+              }`}
+            >
+              <span>{vIdx === 0 ? '📋 ' : '🔀 '}</span>
+              <span>{v.title || (vIdx === 0 ? 'Pizarra Principal' : `Variante ${vIdx}`)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Main Diagram View */}
+      {currentVariant?.diagramDataUrl ? (
+        <div className="rounded-xl overflow-hidden border border-slate-300 bg-slate-950 aspect-[16/10] shadow-sm relative group">
+          <img
+            src={currentVariant.diagramDataUrl}
+            alt={currentVariant.title || `Pizarra táctica de ${drill.title}`}
+            className="w-full h-full object-contain"
+          />
+          {variants.length > 1 && (
+            <div className="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-xs text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md border border-slate-700">
+              {currentVariant.title || `Pizarra ${selectedVariantIdx + 1}`}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 aspect-[16/10] flex flex-col items-center justify-center text-center p-3 text-slate-400">
+          <span className="text-xl mb-1">📋</span>
+          <span className="text-[11px]">Sin diagrama dibujado</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
   training,
   onClose,
@@ -355,26 +454,8 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       </div>
 
                       {/* Tactical Diagram (5 cols) */}
-                      <div className="md:col-span-5 space-y-1">
-                        <h4 className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <Layers className="w-3.5 h-3.5" />
-                          <span>Pizarra Táctica</span>
-                        </h4>
-
-                        {drill.diagramDataUrl ? (
-                          <div className="rounded-xl overflow-hidden border border-slate-300 bg-slate-950 aspect-[16/10] shadow-sm">
-                            <img
-                              src={drill.diagramDataUrl}
-                              alt={`Pizarra táctica de ${drill.title}`}
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 aspect-[16/10] flex flex-col items-center justify-center text-center p-3 text-slate-400">
-                            <span className="text-xl mb-1">📋</span>
-                            <span className="text-[11px]">Sin diagrama dibujado</span>
-                          </div>
-                        )}
+                      <div className="md:col-span-5">
+                        <DrillDiagramViewer drill={drill} />
                       </div>
                     </div>
                   </div>

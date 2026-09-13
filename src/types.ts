@@ -106,6 +106,15 @@ export interface TacticalDiagramElement {
   color?: string;
 }
 
+export interface DrillVariantDiagram {
+  id: string;
+  title: string;
+  courtType: 'full' | 'half';
+  diagramDataUrl?: string;
+  diagramElements: TacticalDiagramElement[];
+  description?: string;
+}
+
 export interface DrillItem {
   id: string;
   title: string;
@@ -116,6 +125,7 @@ export interface DrillItem {
   courtType?: 'full' | 'half';
   diagramDataUrl?: string;
   diagramElements?: TacticalDiagramElement[];
+  diagrams?: DrillVariantDiagram[];
 }
 
 export interface DrillFeedback {
