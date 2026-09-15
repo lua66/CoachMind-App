@@ -46,6 +46,7 @@ export default function App() {
   const [isExitLikeModalOpen, setIsExitLikeModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [editingTraining, setEditingTraining] = useState<SavedTraining | null>(null);
 
   // Exit-Intent Mouse Listener ("no te vayas sin dejar tu like")
   useEffect(() => {
@@ -476,14 +477,29 @@ export default function App() {
   };
 
   // Handlers
-  const handleSaveTraining = (newTraining: SavedTraining) => {
+  const handleSaveTraining = (trainingToSave: SavedTraining) => {
     handleCheckAndRunTrialAction(() => {
-      setTrainings((prev) => [newTraining, ...prev]);
+      setTrainings((prev) => {
+        const exists = prev.some((t) => t.id === trainingToSave.id);
+        if (exists) {
+          return prev.map((t) => (t.id === trainingToSave.id ? trainingToSave : t));
+        }
+        return [trainingToSave, ...prev];
+      });
+      setEditingTraining(null);
     });
+  };
+
+  const handleEditTraining = (training: SavedTraining) => {
+    setEditingTraining(training);
+    setCurrentView('create-training');
   };
 
   const handleDeleteTraining = (id: string) => {
     setTrainings((prev) => prev.filter((t) => t.id !== id));
+    if (editingTraining?.id === id) {
+      setEditingTraining(null);
+    }
   };
 
   const handleAddPlayer = (newPlayer: Player) => {
@@ -666,7 +682,13 @@ export default function App() {
         {currentView === 'trainings' && (
           <TrainingsView
             trainings={trainings}
-            onNavigate={setCurrentView}
+            onNavigate={(v) => {
+              if (v === 'create-training') {
+                setEditingTraining(null);
+              }
+              setCurrentView(v);
+            }}
+            onEditTraining={handleEditTraining}
             onDeleteTraining={handleDeleteTraining}
             userProfile={userProfile}
             onOpenTrialModal={handleOpenTrialModal}
@@ -675,8 +697,14 @@ export default function App() {
 
         {currentView === 'create-training' && (
           <CreateTrainingView
+            initialTraining={editingTraining}
             onSaveTraining={handleSaveTraining}
-            onNavigate={setCurrentView}
+            onNavigate={(v) => {
+              if (v !== 'create-training') {
+                setEditingTraining(null);
+              }
+              setCurrentView(v);
+            }}
             userProfile={userProfile}
             onOpenTrialModal={handleOpenTrialModal}
           />

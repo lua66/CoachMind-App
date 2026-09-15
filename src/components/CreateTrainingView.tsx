@@ -46,6 +46,7 @@ import { TrainingReportModal } from './TrainingReportModal';
 import { exportAuditReportToPdf, printAuditReport } from '../utils/pdfExport';
 
 interface CreateTrainingViewProps {
+  initialTraining?: SavedTraining | null;
   onSaveTraining: (training: SavedTraining) => void;
   onNavigate: (view: ViewMode) => void;
   userProfile?: UserProfile | null;
@@ -53,7 +54,29 @@ interface CreateTrainingViewProps {
   onOpenTrialModal?: (mode?: 'general_action' | 'ficha_entrenador') => void;
 }
 
+const extractDrillsFromTraining = (tr: SavedTraining): DrillItem[] => {
+  const plan = tr.plan;
+  if (!plan) return [];
+  const combined: DrillItem[] = [
+    ...(plan.warmup || []),
+    ...(plan.mainDrills || []),
+    ...(plan.cooldown || []),
+  ];
+  const seen = new Set<string>();
+  const list: DrillItem[] = [];
+  for (const d of combined) {
+    if (!d) continue;
+    const key = d.id || `${d.title}-${d.description}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      list.push(d);
+    }
+  }
+  return list;
+};
+
 export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
+  initialTraining,
   onSaveTraining,
   onNavigate,
   userProfile,
@@ -61,17 +84,21 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
   onOpenTrialModal,
 }) => {
   // Form State
-  const [title, setTitle] = useState('');
-  const [section, setSection] = useState<TrainingSection>('Ejercicios de pretemporada');
-  const [category, setCategory] = useState<CategoryType>('Cadete');
-  const [ageRange, setAgeRange] = useState('14-16 años');
-  const [level, setLevel] = useState<LevelType>('Regional');
-  const [intensity, setIntensity] = useState<IntensityType>('Media');
-  const [objective, setObjective] = useState('');
-  const [durationMinutes, setDurationMinutes] = useState(90);
+  const [title, setTitle] = useState(initialTraining?.title || '');
+  const [section, setSection] = useState<TrainingSection>(
+    initialTraining?.section || 'Ejercicios de pretemporada'
+  );
+  const [category, setCategory] = useState<CategoryType>(initialTraining?.category || 'Cadete');
+  const [ageRange, setAgeRange] = useState(initialTraining?.ageRange || '14-16 años');
+  const [level, setLevel] = useState<LevelType>(initialTraining?.level || 'Regional');
+  const [intensity, setIntensity] = useState<IntensityType>(initialTraining?.intensity || 'Media');
+  const [objective, setObjective] = useState(initialTraining?.objective || '');
+  const [durationMinutes, setDurationMinutes] = useState(initialTraining?.durationMinutes || 90);
 
   // Drills Created by Coach
-  const [drills, setDrills] = useState<DrillItem[]>([]);
+  const [drills, setDrills] = useState<DrillItem[]>(() =>
+    initialTraining ? extractDrillsFromTraining(initialTraining) : []
+  );
   const [activeDrillIndex, setActiveDrillIndex] = useState<number | null>(null);
 
   // Active Drill Editor Fields
@@ -109,9 +136,53 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
   const [savedTrainingForModal, setSavedTrainingForModal] = useState<SavedTraining | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Initialize first empty drill when component mounts
+  // Initialize drill data when component mounts or when initialTraining changes
   useEffect(() => {
-    if (drills.length === 0) {
+    if (initialTraining) {
+      setTitle(initialTraining.title || '');
+      setSection(initialTraining.section || 'Ejercicios de pretemporada');
+      setCategory(initialTraining.category || 'Cadete');
+      setAgeRange(initialTraining.ageRange || '14-16 años');
+      setLevel(initialTraining.level || 'Regional');
+      setIntensity(initialTraining.intensity || 'Media');
+      setObjective(initialTraining.objective || '');
+      setDurationMinutes(initialTraining.durationMinutes || 90);
+      setReviewReport(initialTraining.plan?.reviewReport || null);
+
+      const loadedDrills = extractDrillsFromTraining(initialTraining);
+      setDrills(loadedDrills);
+
+      if (loadedDrills.length > 0) {
+        const firstDrill = loadedDrills[0];
+        setActiveDrillIndex(0);
+        setCurrentDrillTitle(firstDrill.title);
+        setCurrentDrillDuration(firstDrill.durationMinutes || 15);
+        setCurrentDrillPlayers(firstDrill.playersCount || 'Toda la plantilla');
+        setCurrentDrillDescription(firstDrill.description || '');
+        setCurrentDrillTips((firstDrill.coachingTips || []).join('\n'));
+
+        let loadedDiagrams: DrillVariantDiagram[] = [];
+        if (firstDrill.diagrams && firstDrill.diagrams.length > 0) {
+          loadedDiagrams = firstDrill.diagrams;
+        } else {
+          loadedDiagrams = [
+            {
+              id: `diag-${Date.now()}-1`,
+              title: 'Pizarra Principal',
+              courtType: firstDrill.courtType || 'half',
+              diagramDataUrl: firstDrill.diagramDataUrl,
+              diagramElements: firstDrill.diagramElements || [],
+            },
+          ];
+        }
+
+        setCurrentDrillDiagrams(loadedDiagrams);
+        setActiveDiagramIndex(0);
+        setCurrentCourtType(loadedDiagrams[0]?.courtType || 'half');
+        setCurrentDiagramElements(loadedDiagrams[0]?.diagramElements || []);
+        setBoardResetKey((prev) => prev + 1);
+      }
+    } else if (drills.length === 0) {
       setCurrentDrillTitle('Ejercicio 1: Calentamiento y fundamentos');
       setCurrentDrillDuration(15);
       setCurrentDrillPlayers('Toda la plantilla');
@@ -132,7 +203,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
       setActiveDiagramIndex(0);
       setActiveDrillIndex(null);
     }
-  }, []);
+  }, [initialTraining]);
 
   // Flush active whiteboard state into currentDrillDiagrams
   const syncActiveBoardToDiagrams = () => {
@@ -376,7 +447,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     };
 
     return {
-      id: `tr-${Date.now()}`,
+      id: initialTraining?.id || `tr-${Date.now()}`,
       title: title.trim() || objective.slice(0, 30) || 'Sesión de Entrenamiento',
       section,
       category,
@@ -386,7 +457,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
       objective: objective.trim() || 'Desarrollo de fundamentos tácticos y técnicos.',
       durationMinutes: plan.totalDuration,
       exerciseCount: finalDrills.length,
-      createdAt: new Date().toISOString().split('T')[0],
+      createdAt: initialTraining?.createdAt || new Date().toISOString().split('T')[0],
       plan,
     };
   };
@@ -601,15 +672,31 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-white shadow-md shadow-orange-500/20 shrink-0">
-            <Dumbbell className="w-6 h-6" />
+          <div
+            className={`w-12 h-12 rounded-2xl ${
+              initialTraining
+                ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-blue-500/20'
+                : 'bg-gradient-to-tr from-amber-600 to-orange-500 shadow-orange-500/20'
+            } flex items-center justify-center text-white shadow-md shrink-0`}
+          >
+            {initialTraining ? <Edit3 className="w-6 h-6" /> : <Dumbbell className="w-6 h-6" />}
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              Diseñador de Entrenamientos y Pizarra
-            </h1>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                {initialTraining ? 'Editar Entrenamiento' : 'Diseñador de Entrenamientos y Pizarra'}
+              </h1>
+              {initialTraining && (
+                <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-extrabold border border-blue-200 flex items-center gap-1">
+                  <Edit3 className="w-3 h-3" />
+                  <span>Modo Edición</span>
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500">
-              Crea tus ejercicios en la pizarra táctica, organízalos y audita su efectividad con IA
+              {initialTraining
+                ? `Modificando la sesión "${title || initialTraining.title}". Puedes ajustar fichas, pizarras y parámetros.`
+                : 'Crea tus ejercicios en la pizarra táctica, organízalos y audita su efectividad con IA'}
             </p>
           </div>
         </div>
@@ -1181,7 +1268,11 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
               className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02] cursor-pointer"
             >
               <Eye className="w-4 h-4" />
-              <span>Guardar Sesión y Abrir Informe / Descargas</span>
+              <span>
+                {initialTraining
+                  ? 'Actualizar Sesión y Abrir Informe / Descargas'
+                  : 'Guardar Sesión y Abrir Informe / Descargas'}
+              </span>
             </button>
           </div>
         </div>

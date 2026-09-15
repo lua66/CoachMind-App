@@ -17,6 +17,7 @@ import {
   Loader2,
   Layers,
   Trophy,
+  Pencil,
 } from 'lucide-react';
 import { SavedTraining, TrainingSection, ViewMode, UserProfile } from '../types';
 import { TrainingReportModal } from './TrainingReportModal';
@@ -25,6 +26,7 @@ import { exportTrainingSessionToPdf } from '../utils/pdfExport';
 interface TrainingsViewProps {
   trainings: SavedTraining[];
   onNavigate: (view: ViewMode) => void;
+  onEditTraining?: (training: SavedTraining) => void;
   onDeleteTraining: (id: string) => void;
   userProfile?: UserProfile | null;
   onOpenTrialModal?: (mode?: 'general_action' | 'ficha_entrenador') => void;
@@ -33,6 +35,7 @@ interface TrainingsViewProps {
 export const TrainingsView: React.FC<TrainingsViewProps> = ({
   trainings,
   onNavigate,
+  onEditTraining,
   onDeleteTraining,
   userProfile,
   onOpenTrialModal,
@@ -233,6 +236,22 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
                               <Eye className="w-3.5 h-3.5" />
                               <span>Ver</span>
                             </button>
+                            {onEditTraining && (
+                              <button
+                                onClick={() => {
+                                  if (!userProfile) {
+                                    if (onOpenTrialModal) onOpenTrialModal('general_action');
+                                    return;
+                                  }
+                                  onEditTraining(item);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs transition-all shadow-xs cursor-pointer hover:scale-[1.02]"
+                                title="Editar este entrenamiento en la pizarra"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Editar</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 if (!userProfile) {
@@ -278,6 +297,14 @@ export const TrainingsView: React.FC<TrainingsViewProps> = ({
         <TrainingReportModal
           training={selectedTraining}
           onClose={() => setSelectedTraining(null)}
+          onEdit={
+            onEditTraining
+              ? (tr) => {
+                  setSelectedTraining(null);
+                  onEditTraining(tr);
+                }
+              : undefined
+          }
         />
       )}
     </div>

@@ -17,6 +17,7 @@ import {
   FileText,
   Loader2,
   Check,
+  Pencil,
 } from 'lucide-react';
 import { SavedTraining, DrillItem } from '../types';
 import {
@@ -29,6 +30,7 @@ import {
 interface TrainingReportModalProps {
   training: SavedTraining;
   onClose: () => void;
+  onEdit?: (training: SavedTraining) => void;
 }
 
 interface DrillDiagramViewerProps {
@@ -133,6 +135,7 @@ const DrillDiagramViewer: React.FC<DrillDiagramViewerProps> = ({ drill }) => {
 export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
   training,
   onClose,
+  onEdit,
 }) => {
   const printRef = useRef<HTMLDivElement | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -215,6 +218,22 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Edit Training Button */}
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onEdit(training);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all hover:scale-[1.02] cursor-pointer"
+                title="Editar este entrenamiento en la pizarra"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Editar Entrenamiento</span>
+              </button>
+            )}
+
             {/* Download PDF Button (Direct File Download) */}
             <button
               type="button"
