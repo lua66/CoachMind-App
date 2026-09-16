@@ -351,53 +351,73 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
     });
   };
 
-  // PARSER DE EXCEL MODULAR POR HOJA (WorkSheet)
+  // PARSER DE EXCEL MODULAR POR HOJA (WorkSheet) CON DETECCIÓN INTELIGENTE DE FILA DE CABECERA
   const extractPlayersFromWorksheet = (
     ws: XLSX.WorkSheet,
     team: 'local' | 'visitante',
     defaultTeamName: string
   ): { players: PlayerStatsData[]; detectedTeamName: string } => {
-    const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    if (!ws) return { players: [], detectedTeamName: '' };
+    const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     if (!rows || rows.length === 0) {
       return { players: [], detectedTeamName: '' };
     }
 
-    let startRowIdx = 0;
+    // 1. Buscar la fila de encabezados en las primeras 20 filas
+    let headerRowIdx = -1;
     let colMap: Record<string, number> = {};
 
-    const headerRow = rows[0] || [];
-    const isHeader = headerRow.some(
-      (c: any) =>
-        typeof c === 'string' &&
-        (c.toLowerCase().includes('equipo') ||
-          c.toLowerCase().includes('dorsal') ||
-          c.toLowerCase().includes('jugadora') ||
-          c.toLowerCase().includes('pts') ||
-          c.toLowerCase().includes('tla'))
-    );
+    for (let rIdx = 0; rIdx < Math.min(rows.length, 20); rIdx++) {
+      const row = rows[rIdx];
+      if (!Array.isArray(row) || row.length === 0) continue;
 
-    if (isHeader) {
-      startRowIdx = 1;
-      headerRow.forEach((cell: any, idx: number) => {
-        if (!cell) return;
-        const norm = cell.toString().trim().toLowerCase();
-        if (norm === 'equipo' || norm.includes('club') || norm.includes('team')) colMap['equipo'] = idx;
-        else if (norm === 'fecha' || norm.includes('date')) colMap['fecha'] = idx;
-        else if (norm === 'dorsal' || norm === '#' || norm === 'num' || norm === 'núm' || norm === 'no') colMap['dorsal'] = idx;
-        else if (norm === 'jugadora' || norm === 'jugador' || norm === 'nombre' || norm === 'player') colMap['jugadora'] = idx;
-        else if (norm === 'pj') colMap['pj'] = idx;
-        else if (norm === 'min') colMap['min'] = idx;
-        else if (norm === 'pts' || norm === 'puntos') colMap['pts'] = idx;
-        else if (norm.includes('fc') || norm.includes('falta') || norm.includes('fc/p')) colMap['fc_p'] = idx;
-        else if (norm === 'tla' || norm === 'tl_a') colMap['tla'] = idx;
-        else if (norm === 'tli' || norm === 'tl_i') colMap['tli'] = idx;
-        else if (norm === 't2a' || norm === 't2_a') colMap['t2a'] = idx;
-        else if (norm === 't2i' || norm === 't2_i') colMap['t2i'] = idx;
-        else if (norm === 't3a' || norm === 't3_a') colMap['t3a'] = idx;
-        else if (norm === 't3i' || norm === 't3_i') colMap['t3i'] = idx;
-      });
+      const rowStrings = row.map((c) =>
+        c !== null && c !== undefined ? String(c).trim().toLowerCase() : ''
+      );
+
+      // Comprobar si esta fila parece una cabecera de estadísticas
+      const matchesHeader = rowStrings.some(
+        (s) =>
+          s.includes('dorsal') ||
+          s.includes('jugador') ||
+          s.includes('nombre') ||
+          s.includes('pts') ||
+          s.includes('puntos') ||
+          s.includes('tla') ||
+          s.includes('min') ||
+          s.includes('t3') ||
+          s.includes('t2') ||
+          s === '#' ||
+          s === 'nº' ||
+          s === 'no.' ||
+          s === 'num'
+      );
+
+      if (matchesHeader) {
+        headerRowIdx = rIdx;
+        rowStrings.forEach((cellText, idx) => {
+          if (!cellText) return;
+          const norm = cellText.replace(/[\s\-_.]/g, '');
+          if (norm.includes('equipo') || norm.includes('club') || norm.includes('team')) colMap['equipo'] = idx;
+          else if (norm.includes('fecha') || norm.includes('date')) colMap['fecha'] = idx;
+          else if (norm === 'dorsal' || norm === '#' || norm === 'num' || norm === 'núm' || norm === 'no' || norm === 'nº') colMap['dorsal'] = idx;
+          else if (norm.includes('jugadora') || norm.includes('jugador') || norm.includes('nombre') || norm.includes('player') || norm.includes('apellido')) colMap['jugadora'] = idx;
+          else if (norm === 'pj' || norm.includes('partido')) colMap['pj'] = idx;
+          else if (norm === 'min' || norm.includes('minuto') || norm.includes('tiempo')) colMap['min'] = idx;
+          else if (norm === 'pts' || norm.includes('punto') || norm === 'ptos') colMap['pts'] = idx;
+          else if (norm.includes('fc') || norm.includes('falta') || norm.includes('fcp') || norm === 'fp') colMap['fc_p'] = idx;
+          else if (norm === 'tla' || norm === 't1a' || norm.includes('tlanot') || norm === 'tlibre' || norm === 'tl') colMap['tla'] = idx;
+          else if (norm === 'tli' || norm === 't1i' || norm.includes('tlint') || norm.includes('tllanz') || norm.includes('tltot')) colMap['tli'] = idx;
+          else if (norm === 't2a' || norm === '2pa' || norm.includes('t2anot') || norm.includes('2panot')) colMap['t2a'] = idx;
+          else if (norm === 't2i' || norm === '2pi' || norm.includes('t2int') || norm.includes('t2lanz') || norm.includes('2ptot')) colMap['t2i'] = idx;
+          else if (norm === 't3a' || norm === '3pa' || norm.includes('t3anot') || norm.includes('triple') || norm.includes('3panot')) colMap['t3a'] = idx;
+          else if (norm === 't3i' || norm === '3pi' || norm.includes('t3int') || norm.includes('t3lanz') || norm.includes('3ptot')) colMap['t3i'] = idx;
+        });
+        break;
+      }
     }
 
+    const startRowIdx = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
     const getIdx = (key: string, fallback: number) => (colMap[key] !== undefined ? colMap[key] : fallback);
 
     const idxEquipo = getIdx('equipo', 0);
@@ -420,12 +440,17 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
 
     for (let i = startRowIdx; i < rows.length; i++) {
       const r = rows[i];
-      if (!r || r.length === 0) continue;
+      if (!Array.isArray(r) || r.length === 0) continue;
 
-      const getVal = (idx: number) => (r[idx] !== undefined && r[idx] !== null ? r[idx].toString().trim() : '');
+      const getVal = (idx: number) => (r[idx] !== undefined && r[idx] !== null ? String(r[idx]).trim() : '');
       const getNum = (idx: number) => {
         const raw = getVal(idx);
         if (!raw) return 0;
+        if (raw.includes('/')) {
+          const parts = raw.split('/');
+          const parsed = parseInt(parts[0].replace(/[^\d]/g, ''), 10);
+          return isNaN(parsed) ? 0 : Math.max(0, parsed);
+        }
         const parsed = parseInt(raw.replace(/[^\d]/g, ''), 10);
         return isNaN(parsed) ? 0 : Math.max(0, parsed);
       };
@@ -435,10 +460,20 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       const equipo = getVal(idxEquipo) || defaultTeamName || 'Equipo';
       const fecha = getVal(idxFecha) || new Date().toISOString().split('T')[0];
 
+      // Descartar filas vacías o totales
       if (!jugadora && !dorsal) continue;
-      if (jugadora.toLowerCase().includes('total') || jugadora.toLowerCase().includes('equipo')) continue;
+      const jugLower = jugadora.toLowerCase();
+      if (
+        jugLower.includes('total') ||
+        jugLower.includes('equipo') ||
+        jugLower === 'totales' ||
+        jugLower === 'promedio' ||
+        jugLower === 'media'
+      ) {
+        continue;
+      }
 
-      if (equipo && !detectedTeamName) {
+      if (equipo && !detectedTeamName && equipo !== 'Equipo' && equipo !== 'Local' && equipo !== 'Visitante') {
         detectedTeamName = equipo;
       }
 
@@ -458,7 +493,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       }
 
       newPlayers.push({
-        id: `p_excel_${team}_${Date.now()}_${i}`,
+        id: `p_excel_${team}_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,
         equipo,
         fecha,
         dorsal,
@@ -493,7 +528,9 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
         clean === `j${targetStr}` ||
         clean === `jornada0${targetStr}` ||
         clean === `j0${targetStr}` ||
-        clean === `fecha${targetStr}`
+        clean === `fecha${targetStr}` ||
+        clean === `jornada${targetStr}local` ||
+        clean === `jornada${targetStr}vis`
       ) {
         return name;
       }
@@ -521,6 +558,11 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
     fileName: string,
     setFeedback: (msg: string | null) => void
   ) => {
+    if (!wb || !wb.Sheets) {
+      setFeedback('Error: el libro de Excel no está disponible.');
+      return;
+    }
+
     const ws = wb.Sheets[sheetName];
     if (!ws) {
       setFeedback(`No se pudo encontrar la hoja "${sheetName}" en el archivo.`);
@@ -550,11 +592,45 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       });
 
       setFeedback(
-        `¡Hoja "${sheetName}" importada con éxito! Se cargaron ${newPlayers.length} jugadoras con sus estadísticas completas.`
+        `¡Hoja "${sheetName}" cargada con éxito! Se importaron ${newPlayers.length} jugadoras con sus estadísticas.`
       );
       setTimeout(() => setFeedback(null), 6000);
     } else {
-      setFeedback(`La hoja "${sheetName}" no contiene registros válidos de jugadoras.`);
+      setFeedback(`Aviso: La hoja "${sheetName}" no contiene filas con datos de jugadoras válidos.`);
+    }
+  };
+
+  // Quitar / Vaciar datos del Excel de un equipo
+  const handleClearTeamData = (team: 'local' | 'visitante') => {
+    const isLocal = team === 'local';
+    const teamName = isLocal ? (currentMatch.localTeam || 'Equipo Local') : (currentMatch.visitorTeam || 'Equipo Visitante');
+
+    if (!window.confirm(`¿Seguro que deseas quitar el Excel y borrar todas las jugadoras y estadísticas de ${teamName}?`)) {
+      return;
+    }
+
+    setJornadaData((prev) => {
+      const updatedMatches = [...prev.matches] as [MatchData, MatchData, MatchData];
+      const match = { ...updatedMatches[activeMatchIndex] };
+
+      if (isLocal) {
+        match.localPlayers = [];
+      } else {
+        match.visitorPlayers = [];
+      }
+
+      updatedMatches[activeMatchIndex] = match;
+      return { ...prev, matches: updatedMatches };
+    });
+
+    if (isLocal) {
+      if (localFileInputRef.current) localFileInputRef.current.value = '';
+      setLocalFeedback('Datos del equipo local eliminados correctamente.');
+      setTimeout(() => setLocalFeedback(null), 3500);
+    } else {
+      if (visitorFileInputRef.current) visitorFileInputRef.current.value = '';
+      setVisitorFeedback('Datos del equipo visitante eliminados correctamente.');
+      setTimeout(() => setVisitorFeedback(null), 3500);
     }
   };
 
@@ -1414,6 +1490,18 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
               <Plus className="w-3.5 h-3.5" />
               <span>+ Fila manual</span>
             </button>
+
+            {currentMatch.localPlayers.length > 0 && (
+              <button
+                type="button"
+                onClick={() => handleClearTeamData('local')}
+                className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-rose-200"
+                title="Quitar todos los datos y jugadoras cargadas para el equipo local"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Quitar Excel / Limpiar</span>
+              </button>
+            )}
           </div>
 
           {localFeedback && (
@@ -1482,6 +1570,18 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
               <Plus className="w-3.5 h-3.5" />
               <span>+ Fila manual</span>
             </button>
+
+            {currentMatch.visitorPlayers.length > 0 && (
+              <button
+                type="button"
+                onClick={() => handleClearTeamData('visitante')}
+                className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-rose-200"
+                title="Quitar todos los datos y jugadoras cargadas para el equipo visitante"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Quitar Excel / Limpiar</span>
+              </button>
+            )}
           </div>
 
           {visitorFeedback && (
@@ -1556,20 +1656,35 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                 </div>
               </div>
 
-              {/* BOTÓN DESCARGA PDF LOCAL */}
-              <button
-                type="button"
-                onClick={() => handleDownloadPdf('local')}
-                disabled={currentMatch.localPlayers.length === 0}
-                className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all shadow-sm ${
-                  currentMatch.localPlayers.length > 0
-                    ? 'bg-blue-700 hover:bg-blue-600 text-white cursor-pointer active:scale-95'
-                    : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                }`}
-              >
-                <FileDown className="w-4 h-4" />
-                <span>Descargar PDF ({currentMatch.localTeam || 'Local'})</span>
-              </button>
+              {/* ACCIONES SUPERIORES LOCAL */}
+              <div className="flex flex-wrap items-center gap-2">
+                {currentMatch.localPlayers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleClearTeamData('local')}
+                    className="px-3.5 py-2.5 rounded-xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Borrar todas las jugadoras y estadísticas cargadas para el equipo local"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Quitar / Limpiar Equipo</span>
+                  </button>
+                )}
+
+                {/* BOTÓN DESCARGA PDF LOCAL */}
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf('local')}
+                  disabled={currentMatch.localPlayers.length === 0}
+                  className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all shadow-sm ${
+                    currentMatch.localPlayers.length > 0
+                      ? 'bg-blue-700 hover:bg-blue-600 text-white cursor-pointer active:scale-95'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                  }`}
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>Descargar PDF ({currentMatch.localTeam || 'Local'})</span>
+                </button>
+              </div>
             </div>
 
             {currentMatch.localPlayers.length === 0 ? (
@@ -1866,20 +1981,35 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                 </div>
               </div>
 
-              {/* BOTÓN DESCARGA PDF VISITANTE */}
-              <button
-                type="button"
-                onClick={() => handleDownloadPdf('visitante')}
-                disabled={currentMatch.visitorPlayers.length === 0}
-                className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all shadow-sm ${
-                  currentMatch.visitorPlayers.length > 0
-                    ? 'bg-purple-700 hover:bg-purple-600 text-white cursor-pointer active:scale-95'
-                    : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                }`}
-              >
-                <FileDown className="w-4 h-4" />
-                <span>Descargar PDF ({currentMatch.visitorTeam || 'Visitante'})</span>
-              </button>
+              {/* ACCIONES SUPERIORES VISITANTE */}
+              <div className="flex flex-wrap items-center gap-2">
+                {currentMatch.visitorPlayers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleClearTeamData('visitante')}
+                    className="px-3.5 py-2.5 rounded-xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Borrar todas las jugadoras y estadísticas cargadas para el equipo visitante"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Quitar / Limpiar Equipo</span>
+                  </button>
+                )}
+
+                {/* BOTÓN DESCARGA PDF VISITANTE */}
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf('visitante')}
+                  disabled={currentMatch.visitorPlayers.length === 0}
+                  className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all shadow-sm ${
+                    currentMatch.visitorPlayers.length > 0
+                      ? 'bg-purple-700 hover:bg-purple-600 text-white cursor-pointer active:scale-95'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                  }`}
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>Descargar PDF ({currentMatch.visitorTeam || 'Visitante'})</span>
+                </button>
+              </div>
             </div>
 
             {currentMatch.visitorPlayers.length === 0 ? (
@@ -2199,10 +2329,16 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
 
               {/* Selector de Hojas (Pestañas) */}
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
-                  Hojas encontradas en el libro Excel:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-48 overflow-y-auto p-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                    Hojas encontradas en el libro Excel:
+                  </label>
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Haz clic en una hoja para ver su previa o en &quot;Cargar&quot;
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-52 overflow-y-auto p-1">
                   {pendingExcelImport.sheetNames.map((sheetName) => {
                     const isSelected = pendingExcelImport.selectedSheet === sheetName;
                     const ws = pendingExcelImport.workbook.Sheets[sheetName];
@@ -2211,26 +2347,25 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                     const isRecommended = selectedJornadaNum !== null && sheetName.toLowerCase().replace(/[\s\-_]/g, '').includes(`j${selectedJornadaNum}`);
 
                     return (
-                      <button
+                      <div
                         key={sheetName}
-                        type="button"
                         onClick={() =>
                           setPendingExcelImport((prev) => (prev ? { ...prev, selectedSheet: sheetName } : null))
                         }
-                        className={`p-3 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                        className={`p-3 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                           isSelected
-                            ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/30 shadow-xs'
-                            : 'bg-slate-50/60 hover:bg-slate-100 border-slate-200 hover:border-slate-300'
+                            ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/30 shadow-xs'
+                            : 'bg-slate-50/70 hover:bg-slate-100 border-slate-200 hover:border-slate-300'
                         }`}
                       >
                         <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-2 min-w-0">
                             <span
-                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                              className={`w-3 h-3 rounded-full shrink-0 ${
                                 isSelected ? 'bg-emerald-600' : 'bg-slate-300'
                               }`}
                             />
-                            <span className="font-extrabold text-sm text-slate-900 truncate">
+                            <span className="font-black text-sm text-slate-900 truncate">
                               {sheetName}
                             </span>
                           </div>
@@ -2240,11 +2375,36 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 pl-4.5">
-                          <span>{parsed.players.length > 0 ? `${parsed.players.length} jugadoras` : '0 registros'}</span>
-                          {isSelected && <span className="font-bold text-emerald-700">Seleccionada</span>}
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 pl-5">
+                          <span className="font-semibold text-slate-600">
+                            {parsed.players.length > 0 ? `${parsed.players.length} jugadoras` : '0 registros'}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              applySheetImport(
+                                pendingExcelImport.workbook,
+                                sheetName,
+                                pendingExcelImport.team,
+                                pendingExcelImport.fileName,
+                                pendingExcelImport.setFeedback
+                              );
+                              setPendingExcelImport(null);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer shadow-xs flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                : 'bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-300'
+                            }`}
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Cargar esta hoja</span>
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
