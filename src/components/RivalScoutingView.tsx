@@ -356,7 +356,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
     ws: XLSX.WorkSheet,
     team: 'local' | 'visitante',
     defaultTeamName: string
-  ): { players: PlayerStatsData[]; detectedTeamName: string } => {
+  ): { players: PlayerStatsData[]; detectedTeamName: string; detectedJornada?: number } => {
     if (!ws) return { players: [], detectedTeamName: '' };
     const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     if (!rows || rows.length === 0) {
@@ -387,6 +387,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
           s.includes('min') ||
           s.includes('t3') ||
           s.includes('t2') ||
+          s.includes('partido') ||
           s === '#' ||
           s === 'nº' ||
           s === 'no.' ||
@@ -399,10 +400,11 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
           if (!cellText) return;
           const norm = cellText.replace(/[\s\-_.]/g, '');
           if (norm.includes('equipo') || norm.includes('club') || norm.includes('team')) colMap['equipo'] = idx;
+          else if (norm.includes('jornada') || norm === 'j' || norm === 'jorn') colMap['jornada'] = idx;
           else if (norm.includes('fecha') || norm.includes('date')) colMap['fecha'] = idx;
           else if (norm === 'dorsal' || norm === '#' || norm === 'num' || norm === 'núm' || norm === 'no' || norm === 'nº') colMap['dorsal'] = idx;
           else if (norm.includes('jugadora') || norm.includes('jugador') || norm.includes('nombre') || norm.includes('player') || norm.includes('apellido')) colMap['jugadora'] = idx;
-          else if (norm === 'pj' || norm.includes('partido')) colMap['pj'] = idx;
+          else if (norm === 'pj') colMap['pj'] = idx;
           else if (norm === 'min' || norm.includes('minuto') || norm.includes('tiempo')) colMap['min'] = idx;
           else if (norm === 'pts' || norm.includes('punto') || norm === 'ptos') colMap['pts'] = idx;
           else if (norm.includes('fc') || norm.includes('falta') || norm.includes('fcp') || norm === 'fp') colMap['fc_p'] = idx;
@@ -421,6 +423,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
     const getIdx = (key: string, fallback: number) => (colMap[key] !== undefined ? colMap[key] : fallback);
 
     const idxEquipo = getIdx('equipo', 0);
+    const idxJornada = colMap['jornada'] !== undefined ? colMap['jornada'] : -1;
     const idxFecha = getIdx('fecha', 1);
     const idxDorsal = getIdx('dorsal', 2);
     const idxJugadora = getIdx('jugadora', 3);
@@ -437,6 +440,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
 
     const newPlayers: PlayerStatsData[] = [];
     let detectedTeamName = '';
+    let detectedJornada: number | undefined = undefined;
 
     for (let i = startRowIdx; i < rows.length; i++) {
       const r = rows[i];
@@ -444,6 +448,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
 
       const getVal = (idx: number) => (r[idx] !== undefined && r[idx] !== null ? String(r[idx]).trim() : '');
       const getNum = (idx: number) => {
+        if (idx === -1) return 0;
         const raw = getVal(idx);
         if (!raw) return 0;
         if (raw.includes('/')) {
@@ -460,6 +465,12 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       const equipo = getVal(idxEquipo) || defaultTeamName || 'Equipo';
       const fecha = getVal(idxFecha) || new Date().toISOString().split('T')[0];
 
+      // Detección de número de jornada desde la fila
+      if (idxJornada !== -1 && detectedJornada === undefined) {
+        const jVal = getNum(idxJornada);
+        if (jVal > 0) detectedJornada = jVal;
+      }
+
       // Descartar filas vacías o totales
       if (!jugadora && !dorsal) continue;
       const jugLower = jugadora.toLowerCase();
@@ -473,7 +484,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
         continue;
       }
 
-      if (equipo && !detectedTeamName && equipo !== 'Equipo' && equipo !== 'Local' && equipo !== 'Visitante') {
+      if (equipo && !detectedTeamName && equipo !== 'Equipo' && equipo !== 'Local' && equipo !== 'Visitante' && equipo !== 'local' && equipo !== 'visitante') {
         detectedTeamName = equipo;
       }
 
@@ -512,15 +523,34 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       });
     }
 
-    return { players: newPlayers, detectedTeamName };
+    return { players: newPlayers, detectedTeamName, detectedJornada };
   };
 
-  // Buscar hoja recomendada que coincida con la jornada seleccionada (ej. "Jornada 3", "J3", "J 3", "Fecha 3")
-  const findBestMatchingSheet = (sheetNames: string[], jornadaNum: number | null): string => {
+  // Buscar hoja recomendada que coincida con la jornada seleccionada
+  const findBestMatchingSheet = (
+    wb: XLSX.WorkBook,
+    sheetNames: string[],
+    jornadaNum: number | null
+  ): string => {
     if (!sheetNames || sheetNames.length === 0) return '';
     if (!jornadaNum) return sheetNames[0];
 
     const targetStr = String(jornadaNum);
+
+    // 1. Primero: Buscar por contenido real de las filas (columna 'jornada' dentro de la hoja)
+    if (wb && wb.Sheets) {
+      for (const name of sheetNames) {
+        const ws = wb.Sheets[name];
+        if (ws) {
+          const { detectedJornada } = extractPlayersFromWorksheet(ws, 'local', '');
+          if (detectedJornada === jornadaNum) {
+            return name;
+          }
+        }
+      }
+    }
+
+    // 2. Segundo: Buscar coincidencia en el nombre de la hoja (ej. "Jornada 2", "J2", "Jornada 2 vs sese")
     for (const name of sheetNames) {
       const clean = name.toLowerCase().replace(/[\s\-_]/g, '');
       if (
@@ -541,10 +571,18 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       if (
         clean.includes(`jornada ${targetStr}`) ||
         clean.includes(`j ${targetStr}`) ||
-        clean.includes(`j${targetStr}`)
+        clean.includes(`j${targetStr}`) ||
+        clean.includes(`jornada${targetStr}`) ||
+        clean.includes(`fecha ${targetStr}`)
       ) {
         return name;
       }
+    }
+
+    // 3. Tercero: Revisar si el libro de Excel tiene una pestaña activa guardada
+    const activeTabIndex = (wb as any)?.Workbook?.Views?.[0]?.activeTab;
+    if (typeof activeTabIndex === 'number' && sheetNames[activeTabIndex]) {
+      return sheetNames[activeTabIndex];
     }
 
     return sheetNames[0];
@@ -656,7 +694,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
           applySheetImport(wb, wb.SheetNames[0], team, file.name, setFeedback);
         } else {
           // Si tiene múltiples hojas (por ejemplo Jornada 1, Jornada 2, etc.), abrir selector
-          const bestMatch = findBestMatchingSheet(wb.SheetNames, selectedJornadaNum);
+          const bestMatch = findBestMatchingSheet(wb, wb.SheetNames, selectedJornadaNum);
           setPendingExcelImport({
             workbook: wb,
             fileName: file.name,
@@ -2334,17 +2372,20 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                     Hojas encontradas en el libro Excel:
                   </label>
                   <span className="text-[11px] font-semibold text-slate-500">
-                    Haz clic en una hoja para ver su previa o en &quot;Cargar&quot;
+                    Haz clic en una hoja para previsualizarla o cárgala directamente
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-52 overflow-y-auto p-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-56 overflow-y-auto p-1">
                   {pendingExcelImport.sheetNames.map((sheetName) => {
                     const isSelected = pendingExcelImport.selectedSheet === sheetName;
                     const ws = pendingExcelImport.workbook.Sheets[sheetName];
                     const defaultName = pendingExcelImport.team === 'local' ? (currentMatch.localTeam || 'Local') : (currentMatch.visitorTeam || 'Visitante');
                     const parsed = ws ? extractPlayersFromWorksheet(ws, pendingExcelImport.team, defaultName) : { players: [] };
-                    const isRecommended = selectedJornadaNum !== null && sheetName.toLowerCase().replace(/[\s\-_]/g, '').includes(`j${selectedJornadaNum}`);
+                    const isRecommended = selectedJornadaNum !== null && (
+                      (parsed as any).detectedJornada === selectedJornadaNum ||
+                      sheetName.toLowerCase().replace(/[\s\-_]/g, '').includes(`j${selectedJornadaNum}`)
+                    );
 
                     return (
                       <div
@@ -2352,32 +2393,42 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                         onClick={() =>
                           setPendingExcelImport((prev) => (prev ? { ...prev, selectedSheet: sheetName } : null))
                         }
-                        className={`p-3 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                        className={`p-3.5 rounded-2xl text-left border-2 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
                           isSelected
-                            ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/30 shadow-xs'
-                            : 'bg-slate-50/70 hover:bg-slate-100 border-slate-200 hover:border-slate-300'
+                            ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/20 shadow-md scale-[1.01]'
+                            : 'bg-slate-50/80 hover:bg-slate-100/90 border-slate-200 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className={`w-3 h-3 rounded-full shrink-0 ${
-                                isSelected ? 'bg-emerald-600' : 'bg-slate-300'
+                        <div className="flex items-start justify-between w-full gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 bg-white'
                               }`}
-                            />
-                            <span className="font-black text-sm text-slate-900 truncate">
-                              {sheetName}
-                            </span>
+                            >
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-black text-sm text-slate-900 block truncate">
+                                {sheetName}
+                              </span>
+                              {(parsed as any).detectedJornada && (
+                                <span className="text-[10px] font-bold text-slate-500">
+                                  Datos de Jornada {(parsed as any).detectedJornada}
+                                </span>
+                              )}
+                            </div>
                           </div>
+
                           {isRecommended && (
-                            <span className="text-[10px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full shrink-0 shadow-xs">
-                              ⭐ J{selectedJornadaNum}
+                            <span className="text-[10px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full shrink-0 shadow-xs flex items-center gap-1">
+                              ⭐ J{selectedJornadaNum} (Recomendada)
                             </span>
                           )}
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 pl-5">
-                          <span className="font-semibold text-slate-600">
+                        <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-slate-200/60">
+                          <span className="font-bold">
                             {parsed.players.length > 0 ? `${parsed.players.length} jugadoras` : '0 registros'}
                           </span>
 
@@ -2394,13 +2445,13 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                               );
                               setPendingExcelImport(null);
                             }}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer shadow-xs flex items-center gap-1 ${
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs flex items-center gap-1.5 ${
                               isSelected
                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                : 'bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-300'
+                                : 'bg-white hover:bg-emerald-600 hover:text-white text-slate-800 border border-slate-300'
                             }`}
                           >
-                            <Check className="w-3 h-3" />
+                            <Check className="w-3.5 h-3.5" />
                             <span>Cargar esta hoja</span>
                           </button>
                         </div>
@@ -2418,21 +2469,21 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                 const samplePlayers = previewData.players.slice(0, 5);
 
                 return (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                  <div className="rounded-2xl border-2 border-emerald-200/80 bg-emerald-50/30 p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Table className="w-4 h-4 text-emerald-700" />
                         <h4 className="text-xs font-black text-slate-800">
-                          Vista previa de: <span className="text-emerald-700 underline">{pendingExcelImport.selectedSheet}</span>
+                          Vista previa de: <span className="text-emerald-700 underline font-extrabold">{pendingExcelImport.selectedSheet}</span>
                         </h4>
                       </div>
                       <span className="text-xs font-bold text-slate-600">
-                        Total detectado: <strong>{previewData.players.length}</strong> jugadoras
+                        Total detectado: <strong className="text-emerald-800">{previewData.players.length}</strong> jugadoras
                       </span>
                     </div>
 
                     {samplePlayers.length > 0 ? (
-                      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
                         <table className="w-full text-[11px] text-left">
                           <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                             <tr>
@@ -2504,7 +2555,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/25 transition-all hover:scale-[1.02] cursor-pointer flex items-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Importar Hoja &quot;{pendingExcelImport.selectedSheet}&quot;</span>
+                <span>Importar Hoja Seleccionada: &quot;{pendingExcelImport.selectedSheet}&quot;</span>
               </button>
             </div>
           </div>
