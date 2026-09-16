@@ -498,8 +498,11 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       const t3a = getNum(idxT3A) || 0;
       const t3i = getNum(idxT3I) || t3a;
 
-      let pts = getNum(idxPts);
-      if (pts === 0 && (tla > 0 || t2a > 0 || t3a > 0)) {
+      let pts = 0;
+      if (idxPts !== -1) {
+        pts = getNum(idxPts);
+      } else {
+        // Solo si la columna PTS no existe en el Excel, calculamos a partir de los tiros
         pts = tla * 1 + t2a * 2 + t3a * 3;
       }
 
@@ -852,7 +855,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
   const localAnalysis = useMemo(() => {
     const list = currentMatch.localPlayers.map((p) => ({
       ...p,
-      pts: p.pts || (p.tla * 1 + p.t2a * 2 + p.t3a * 3),
+      pts: typeof p.pts === 'number' && !isNaN(p.pts) ? p.pts : (p.tla * 1 + p.t2a * 2 + p.t3a * 3),
       pctTL: p.tli > 0 ? Math.round((p.tla / p.tli) * 100) : null,
       pctT2: p.t2i > 0 ? Math.round((p.t2a / p.t2i) * 100) : null,
       pctT3: p.t3i > 0 ? Math.round((p.t3a / p.t3i) * 100) : null,
@@ -886,7 +889,7 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
   const visitorAnalysis = useMemo(() => {
     const list = currentMatch.visitorPlayers.map((p) => ({
       ...p,
-      pts: p.pts || (p.tla * 1 + p.t2a * 2 + p.t3a * 3),
+      pts: typeof p.pts === 'number' && !isNaN(p.pts) ? p.pts : (p.tla * 1 + p.t2a * 2 + p.t3a * 3),
       pctTL: p.tli > 0 ? Math.round((p.tla / p.tli) * 100) : null,
       pctT2: p.t2i > 0 ? Math.round((p.t2a / p.t2i) * 100) : null,
       pctT3: p.t3i > 0 ? Math.round((p.t3a / p.t3i) * 100) : null,
