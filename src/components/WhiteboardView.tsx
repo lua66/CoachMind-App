@@ -1962,29 +1962,31 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
           </div>
 
           {/* Action Footer Controls */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-2">
+          <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm space-y-2">
+            {/* Fila 1: Deshacer y Borrar Trazos */}
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={handleUndo}
-                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Deshacer</span>
               </button>
               <button
                 onClick={handleClearTrazos}
-                className="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Borrar Trazos</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Fila 2: Descargar MP4 y Guardar Táctica */}
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleExportMp4Video()}
                 disabled={isExportingVideo}
-                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                 title="Descargar la jugada actual en video MP4 de alta resolución"
               >
                 <Video className="w-3.5 h-3.5" />
@@ -1992,7 +1994,7 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
               </button>
               <button
                 onClick={handleOpenSaveModal}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20 active:scale-95 transition-all cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 active:scale-95 transition-all cursor-pointer"
               >
                 {savedSuccess ? (
                   <>
