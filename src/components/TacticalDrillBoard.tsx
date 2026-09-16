@@ -182,20 +182,20 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
       if (dist < 2) return;
 
       let lineStyle: 'pass' | 'cut' | 'dribble' | 'screen' | 'shot' = 'cut';
-      let color = '#F8FAFC'; // slate-50
+      let color = '#059669'; // emerald-600
 
       if (tool === 'line_pass') {
         lineStyle = 'pass';
-        color = '#38BDF8'; // sky-400
+        color = '#0284C7'; // sky-600
       } else if (tool === 'line_dribble') {
         lineStyle = 'dribble';
-        color = '#FBBF24'; // amber-400
+        color = '#D97706'; // amber-600
       } else if (tool === 'line_screen') {
         lineStyle = 'screen';
-        color = '#4ADE80'; // green-400
+        color = '#E11D48'; // rose-600
       } else if (tool === 'line_shot') {
         lineStyle = 'shot';
-        color = '#F43F5E'; // rose-500
+        color = '#7C3AED'; // violet-600
       }
 
       const newLine: TacticalDiagramElement = {
@@ -742,7 +742,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
 
         {/* Tactical Canvas SVG */}
         <div
-          className="relative w-full aspect-[16/10] bg-[#0d281e] rounded-2xl overflow-hidden shadow-inner border-2 border-slate-700/80 cursor-crosshair touch-none select-none"
+          className="relative w-full aspect-[16/10] bg-white rounded-2xl overflow-hidden shadow-md border-2 border-slate-300 cursor-crosshair touch-none select-none"
           style={{ touchAction: 'none' }}
         >
           <svg
@@ -755,16 +755,16 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
             onPointerUp={handleCanvasPointerUp}
           >
             {/* Court Flooring Background */}
-            <rect width="100" height="100" fill="#0d281e" />
+            <rect width="100" height="100" fill="#ffffff" />
 
             {/* Realistic FIBA Markings */}
             {courtType === 'half' ? (
               // Half Court Layout
-              <g stroke="rgba(255,255,255,0.75)" strokeWidth="0.65" fill="none">
+              <g stroke="#334155" strokeWidth="0.75" fill="none">
                 {/* Court Boundary */}
                 <rect x="4" y="4" width="92" height="92" rx="1" />
                 {/* Free throw lane (Zona) */}
-                <rect x="36" y="4" width="28" height="38" fill="rgba(255,255,255,0.03)" />
+                <rect x="36" y="4" width="28" height="38" fill="rgba(51,65,85,0.04)" />
                 {/* Free throw circle */}
                 <circle cx="50" cy="42" r="11" />
                 <line x1="39" y1="42" x2="61" y2="42" strokeDasharray="1.2,1.2" />
@@ -773,15 +773,15 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                 {/* Restricted Area (Semicírculo de no carga) */}
                 <path d="M 44 14 A 6 6 0 0 0 56 14" />
                 {/* Backboard and Basket */}
-                <line x1="42" y1="9" x2="58" y2="9" strokeWidth="1.2" stroke="white" />
-                <line x1="50" y1="9" x2="50" y2="12" strokeWidth="0.8" stroke="white" />
+                <line x1="42" y1="9" x2="58" y2="9" strokeWidth="1.4" stroke="#0f172a" />
+                <line x1="50" y1="9" x2="50" y2="12" strokeWidth="0.8" stroke="#0f172a" />
                 <circle cx="50" cy="13" r="2.2" stroke="#ea580c" strokeWidth="1" fill="none" />
                 {/* Half court center circle at bottom */}
                 <path d="M 39 96 A 11 11 0 0 1 61 96" />
               </g>
             ) : (
               // Full Court Layout
-              <g stroke="rgba(255,255,255,0.75)" strokeWidth="0.65" fill="none">
+              <g stroke="#334155" strokeWidth="0.75" fill="none">
                 {/* Outer Boundary */}
                 <rect x="4" y="4" width="92" height="92" rx="1" />
                 {/* Half court line */}
@@ -790,18 +790,18 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                 <circle cx="50" cy="50" r="9" />
 
                 {/* Top Basket (Zona, 3p, Hoop) */}
-                <rect x="37" y="4" width="26" height="22" fill="rgba(255,255,255,0.03)" />
+                <rect x="37" y="4" width="26" height="22" fill="rgba(51,65,85,0.04)" />
                 <circle cx="50" cy="26" r="8" />
                 <path d="M 14 4 L 14 12 A 36 36 0 0 0 86 12 L 86 4" />
-                <line x1="43" y1="8" x2="57" y2="8" strokeWidth="1" stroke="white" />
-                <circle cx="50" cy="11" r="2" stroke="#ea580c" strokeWidth="0.9" fill="none" />
+                <line x1="43" y1="8" x2="57" y2="8" strokeWidth="1.4" stroke="#0f172a" />
+                <circle cx="50" cy="11" r="2" stroke="#ea580c" strokeWidth="1" fill="none" />
 
                 {/* Bottom Basket (Zona, 3p, Hoop) */}
-                <rect x="37" y="74" width="26" height="22" fill="rgba(255,255,255,0.03)" />
+                <rect x="37" y="74" width="26" height="22" fill="rgba(51,65,85,0.04)" />
                 <circle cx="50" cy="74" r="8" />
                 <path d="M 14 96 L 14 88 A 36 36 0 0 1 86 88 L 86 96" />
-                <line x1="43" y1="92" x2="57" y2="92" strokeWidth="1" stroke="white" />
-                <circle cx="50" cy="89" r="2" stroke="#ea580c" strokeWidth="0.9" fill="none" />
+                <line x1="43" y1="92" x2="57" y2="92" strokeWidth="1.4" stroke="#0f172a" />
+                <circle cx="50" cy="89" r="2" stroke="#ea580c" strokeWidth="1" fill="none" />
               </g>
             )}
 
@@ -812,7 +812,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                 const p1 = line.points![0];
                 const p2 = line.points![1];
                 const isSelected = selectedElementId === line.id;
-                const lineColor = line.color || '#ffffff';
+                const lineColor = line.color || '#059669';
 
                 if (line.lineStyle === 'screen') {
                   const bar = getScreenBarCoords(p1, p2);
@@ -830,7 +830,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                         y1={p1.y}
                         x2={p2.x}
                         y2={p2.y}
-                        stroke={isSelected ? '#38BDF8' : lineColor}
+                        stroke={isSelected ? '#0284C7' : lineColor}
                         strokeWidth={isSelected ? '2.2' : '1.5'}
                       />
                       <line
@@ -838,7 +838,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                         y1={bar.b1.y}
                         x2={bar.b2.x}
                         y2={bar.b2.y}
-                        stroke={isSelected ? '#38BDF8' : lineColor}
+                        stroke={isSelected ? '#0284C7' : lineColor}
                         strokeWidth={isSelected ? '2.8' : '2.2'}
                       />
                     </g>
@@ -860,10 +860,10 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                       <path
                         d={zigzagD}
                         fill="none"
-                        stroke={isSelected ? '#38BDF8' : lineColor}
+                        stroke={isSelected ? '#0284C7' : lineColor}
                         strokeWidth={isSelected ? '2.2' : '1.5'}
                       />
-                      <polygon points={arrowPts} fill={isSelected ? '#38BDF8' : lineColor} />
+                      <polygon points={arrowPts} fill={isSelected ? '#0284C7' : lineColor} />
                     </g>
                   );
                 }
@@ -887,11 +887,11 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                       y1={p1.y}
                       x2={p2.x}
                       y2={p2.y}
-                      stroke={isSelected ? '#38BDF8' : lineColor}
+                      stroke={isSelected ? '#0284C7' : lineColor}
                       strokeWidth={isSelected ? '2.2' : '1.5'}
                       strokeDasharray={isDashed ? '2.5,1.5' : isDotted ? '1,1.2' : undefined}
                     />
-                    <polygon points={arrowPts} fill={isSelected ? '#38BDF8' : lineColor} />
+                    <polygon points={arrowPts} fill={isSelected ? '#0284C7' : lineColor} />
                   </g>
                 );
               })}
@@ -909,7 +909,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                           y1={lineStartPoint.y}
                           x2={currentMousePoint.x}
                           y2={currentMousePoint.y}
-                          stroke="#4ADE80"
+                          stroke="#E11D48"
                           strokeWidth="1.6"
                         />
                         <line
@@ -917,7 +917,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                           y1={bar.b1.y}
                           x2={bar.b2.x}
                           y2={bar.b2.y}
-                          stroke="#4ADE80"
+                          stroke="#E11D48"
                           strokeWidth="2.5"
                         />
                       </>
@@ -929,8 +929,8 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                     const arrowPts = getArrowHeadPoints(lineStartPoint, currentMousePoint);
                     return (
                       <>
-                        <path d={zigzagD} fill="none" stroke="#FBBF24" strokeWidth="1.6" />
-                        <polygon points={arrowPts} fill="#FBBF24" />
+                        <path d={zigzagD} fill="none" stroke="#D97706" strokeWidth="1.6" />
+                        <polygon points={arrowPts} fill="#D97706" />
                       </>
                     );
                   })()
@@ -939,10 +939,10 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                     const arrowPts = getArrowHeadPoints(lineStartPoint, currentMousePoint);
                     const color =
                       selectedTool === 'line_pass'
-                        ? '#38BDF8'
+                        ? '#0284C7'
                         : selectedTool === 'line_shot'
-                        ? '#F43F5E'
-                        : '#F8FAFC';
+                        ? '#7C3AED'
+                        : '#059669';
                     return (
                       <>
                         <line
@@ -966,7 +966,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                   })()
                 )}
                 {/* Start Point indicator */}
-                <circle cx={lineStartPoint.x} cy={lineStartPoint.y} r="1.5" fill="#38BDF8" />
+                <circle cx={lineStartPoint.x} cy={lineStartPoint.y} r="1.5" fill="#0284C7" />
               </g>
             )}
 
@@ -993,9 +993,9 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                       <circle
                         r="3.4"
                         fill="#ea580c"
-                        stroke={isSelected ? '#38BDF8' : '#ffffff'}
-                        strokeWidth={isSelected ? '1.2' : '0.6'}
-                        filter="drop-shadow(0 1px 2px rgba(0,0,0,0.5))"
+                        stroke={isSelected ? '#0284C7' : '#0f172a'}
+                        strokeWidth={isSelected ? '1.2' : '0.7'}
+                        filter="drop-shadow(0 1px 2px rgba(0,0,0,0.3))"
                       />
                       <text
                         textAnchor="middle"
@@ -1021,9 +1021,9 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                       <circle
                         r="3.4"
                         fill="#2563eb"
-                        stroke={isSelected ? '#38BDF8' : '#ffffff'}
-                        strokeWidth={isSelected ? '1.2' : '0.6'}
-                        filter="drop-shadow(0 1px 2px rgba(0,0,0,0.5))"
+                        stroke={isSelected ? '#0284C7' : '#0f172a'}
+                        strokeWidth={isSelected ? '1.2' : '0.7'}
+                        filter="drop-shadow(0 1px 2px rgba(0,0,0,0.3))"
                       />
                       <text
                         textAnchor="middle"
@@ -1049,7 +1049,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                       <circle
                         r="2.6"
                         fill="#f97316"
-                        stroke={isSelected ? '#38BDF8' : '#000000'}
+                        stroke={isSelected ? '#0284C7' : '#000000'}
                         strokeWidth={isSelected ? '1' : '0.4'}
                       />
                       <line x1="-2.4" y1="0" x2="2.4" y2="0" stroke="#000000" strokeWidth="0.3" />
@@ -1074,10 +1074,10 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                       <polygon
                         points="0,-2.8 2.6,2.4 -2.6,2.4"
                         fill="#eab308"
-                        stroke={isSelected ? '#38BDF8' : '#713f12'}
+                        stroke={isSelected ? '#0284C7' : '#713f12'}
                         strokeWidth={isSelected ? '1' : '0.4'}
                       />
-                      <line x1="-1.8" y1="0.6" x2="1.8" y2="0.6" stroke="#ffffff" strokeWidth="0.4" />
+                      <line x1="-1.8" y1="0.6" x2="1.8" y2="0.6" stroke="#713f12" strokeWidth="0.4" />
                     </g>
                   );
                 }
@@ -1097,7 +1097,7 @@ export const TacticalDrillBoard = forwardRef<TacticalDrillBoardRef, TacticalDril
                         height="7"
                         rx="1.5"
                         fill="rgba(15,23,42,0.9)"
-                        stroke={isSelected ? '#38BDF8' : '#475569'}
+                        stroke={isSelected ? '#0284C7' : '#475569'}
                         strokeWidth={isSelected ? '1' : '0.5'}
                       />
                       <text

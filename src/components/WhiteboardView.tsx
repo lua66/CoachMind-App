@@ -1436,7 +1436,7 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
           {/* Cancha de Baloncesto (Solo Lectura) */}
           <div
             ref={viewerContainerRef}
-            className="w-full aspect-[16/10] bg-[#1E293B] rounded-2xl relative overflow-hidden border-2 border-slate-700 shadow-inner select-none pointer-events-none"
+            className="w-full aspect-[16/10] bg-white rounded-2xl relative overflow-hidden border-2 border-slate-300 shadow-sm select-none pointer-events-none"
           >
             {/* FIBA Basketball Court Lines SVG */}
             <svg
@@ -1444,27 +1444,31 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
             >
-              <rect x="2" y="3" width="96" height="94" fill="none" stroke="#64748B" strokeWidth="0.8" />
+              <rect x="2" y="3" width="96" height="94" fill="none" stroke="#334155" strokeWidth="0.85" />
               {courtType === 'full' && (
                 <>
-                  <line x1="50" y1="3" x2="50" y2="97" stroke="#64748B" strokeWidth="0.8" />
-                  <ellipse cx="50" cy="50" rx="8" ry="12" fill="none" stroke="#64748B" strokeWidth="0.8" />
+                  <line x1="50" y1="3" x2="50" y2="97" stroke="#334155" strokeWidth="0.85" />
+                  <ellipse cx="50" cy="50" rx="8" ry="12" fill="none" stroke="#334155" strokeWidth="0.85" />
                 </>
               )}
-              <rect x="2" y="30" width="19" height="40" fill="none" stroke="#64748B" strokeWidth="0.8" />
-              <path d="M 21 30 A 6 10 0 0 1 21 70" fill="none" stroke="#64748B" strokeWidth="0.8" strokeDasharray="1.5 1.5" />
-              <path d="M 21 30 A 6 10 0 0 0 21 70" fill="none" stroke="#64748B" strokeWidth="0.8" />
-              <path d="M 2 13 L 12 13 A 24 37 0 0 1 12 87 L 2 87" fill="none" stroke="#64748B" strokeWidth="0.8" />
-              <line x1="4" y1="43" x2="4" y2="57" stroke="#FFFFFF" strokeWidth="1.2" />
-              <circle cx="5.5" cy="50" r="2.2" fill="none" stroke="#F97316" strokeWidth="0.8" />
+              {/* Left Key */}
+              <rect x="2" y="30" width="19" height="40" fill="rgba(51, 65, 85, 0.04)" stroke="#334155" strokeWidth="0.85" />
+              <path d="M 21 30 A 6 10 0 0 1 21 70" fill="none" stroke="#334155" strokeWidth="0.85" strokeDasharray="1.5 1.5" />
+              <path d="M 21 30 A 6 10 0 0 0 21 70" fill="none" stroke="#334155" strokeWidth="0.85" />
+              <path d="M 2 13 L 12 13 A 24 37 0 0 1 12 87 L 2 87" fill="none" stroke="#334155" strokeWidth="0.85" />
+              {/* Left Backboard and Rim */}
+              <line x1="4" y1="43" x2="4" y2="57" stroke="#0F172A" strokeWidth="1.4" />
+              <circle cx="5.5" cy="50" r="2.2" fill="none" stroke="#EA580C" strokeWidth="0.9" />
               {courtType === 'full' && (
                 <>
-                  <rect x="79" y="30" width="19" height="40" fill="none" stroke="#64748B" strokeWidth="0.8" />
-                  <path d="M 79 30 A 6 10 0 0 0 79 70" fill="none" stroke="#64748B" strokeWidth="0.8" strokeDasharray="1.5 1.5" />
-                  <path d="M 79 30 A 6 10 0 0 1 79 70" fill="none" stroke="#64748B" strokeWidth="0.8" />
-                  <path d="M 98 13 L 88 13 A 24 37 0 0 0 88 87 L 98 87" fill="none" stroke="#64748B" strokeWidth="0.8" />
-                  <line x1="96" y1="43" x2="96" y2="57" stroke="#FFFFFF" strokeWidth="1.2" />
-                  <circle cx="94.5" cy="50" r="2.2" fill="none" stroke="#F97316" strokeWidth="0.8" />
+                  {/* Right Key */}
+                  <rect x="79" y="30" width="19" height="40" fill="rgba(51, 65, 85, 0.04)" stroke="#334155" strokeWidth="0.85" />
+                  <path d="M 79 30 A 6 10 0 0 0 79 70" fill="none" stroke="#334155" strokeWidth="0.85" strokeDasharray="1.5 1.5" />
+                  <path d="M 79 30 A 6 10 0 0 1 79 70" fill="none" stroke="#334155" strokeWidth="0.85" />
+                  <path d="M 98 13 L 88 13 A 24 37 0 0 0 88 87 L 98 87" fill="none" stroke="#334155" strokeWidth="0.85" />
+                  {/* Right Backboard and Rim */}
+                  <line x1="96" y1="43" x2="96" y2="57" stroke="#0F172A" strokeWidth="1.4" />
+                  <circle cx="94.5" cy="50" r="2.2" fill="none" stroke="#EA580C" strokeWidth="0.9" />
                 </>
               )}
             </svg>
@@ -1542,12 +1546,12 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
                   className="absolute w-8 h-8 rounded-full flex items-center justify-center font-extrabold text-xs shadow-lg transition-transform pointer-events-none"
                 >
                   {token.type === 'playerA' && (
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center border-2 border-white font-bold text-xs shadow-md">
+                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center border-2 border-slate-900 font-bold text-xs shadow-md">
                       {token.label}
                     </div>
                   )}
                   {token.type === 'playerB' && (
-                    <div className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center border-2 border-white font-bold text-xs shadow-md">
+                    <div className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center border-2 border-slate-900 font-bold text-xs shadow-md">
                       {token.label}
                     </div>
                   )}
@@ -2143,7 +2147,7 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
-            className="w-full aspect-[16/10] bg-[#1E293B] rounded-2xl relative overflow-hidden border-2 border-slate-700 cursor-crosshair shadow-inner tactical-board-surface select-none touch-none"
+            className="w-full aspect-[16/10] bg-white rounded-2xl relative overflow-hidden border-2 border-slate-300 cursor-crosshair shadow-md tactical-board-surface select-none touch-none"
             style={{
               touchAction: 'none',
               WebkitTouchCallout: 'none',
@@ -2164,8 +2168,8 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
                 width="96"
                 height="94"
                 fill="none"
-                stroke="#64748B"
-                strokeWidth="0.8"
+                stroke="#334155"
+                strokeWidth="0.85"
               />
 
               {courtType === 'full' && (
@@ -2176,8 +2180,8 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
                     y1="3"
                     x2="50"
                     y2="97"
-                    stroke="#64748B"
-                    strokeWidth="0.8"
+                    stroke="#334155"
+                    strokeWidth="0.85"
                   />
                   {/* Center Circle */}
                   <ellipse
@@ -2186,8 +2190,8 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
                     rx="8"
                     ry="12"
                     fill="none"
-                    stroke="#64748B"
-                    strokeWidth="0.8"
+                    stroke="#334155"
+                    strokeWidth="0.85"
                   />
                 </>
               )}
@@ -2198,34 +2202,34 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
                 y="30"
                 width="19"
                 height="40"
-                fill="none"
-                stroke="#64748B"
-                strokeWidth="0.8"
+                fill="rgba(51, 65, 85, 0.04)"
+                stroke="#334155"
+                strokeWidth="0.85"
               />
               {/* Left Free throw circle */}
               <path
                 d="M 21 30 A 6 10 0 0 1 21 70"
                 fill="none"
-                stroke="#64748B"
-                strokeWidth="0.8"
+                stroke="#334155"
+                strokeWidth="0.85"
                 strokeDasharray="1.5 1.5"
               />
               <path
                 d="M 21 30 A 6 10 0 0 0 21 70"
                 fill="none"
-                stroke="#64748B"
-                strokeWidth="0.8"
+                stroke="#334155"
+                strokeWidth="0.85"
               />
               {/* Left 3-Point Arc */}
               <path
                 d="M 2 13 L 12 13 A 24 37 0 0 1 12 87 L 2 87"
                 fill="none"
-                stroke="#64748B"
-                strokeWidth="0.8"
+                stroke="#334155"
+                strokeWidth="0.85"
               />
               {/* Left Hoop and Backboard */}
-              <line x1="4" y1="43" x2="4" y2="57" stroke="#FFFFFF" strokeWidth="1.2" />
-              <circle cx="5.5" cy="50" r="2.2" fill="none" stroke="#F97316" strokeWidth="0.8" />
+              <line x1="4" y1="43" x2="4" y2="57" stroke="#0F172A" strokeWidth="1.4" />
+              <circle cx="5.5" cy="50" r="2.2" fill="none" stroke="#EA580C" strokeWidth="0.9" />
 
               {/* Right Side (if full court) */}
               {courtType === 'full' && (
@@ -2236,34 +2240,34 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
                     y="30"
                     width="19"
                     height="40"
-                    fill="none"
-                    stroke="#64748B"
-                    strokeWidth="0.8"
+                    fill="rgba(51, 65, 85, 0.04)"
+                    stroke="#334155"
+                    strokeWidth="0.85"
                   />
                   {/* Right Free throw circle */}
                   <path
                     d="M 79 30 A 6 10 0 0 0 79 70"
                     fill="none"
-                    stroke="#64748B"
-                    strokeWidth="0.8"
+                    stroke="#334155"
+                    strokeWidth="0.85"
                     strokeDasharray="1.5 1.5"
                   />
                   <path
                     d="M 79 30 A 6 10 0 0 1 79 70"
                     fill="none"
-                    stroke="#64748B"
-                    strokeWidth="0.8"
+                    stroke="#334155"
+                    strokeWidth="0.85"
                   />
                   {/* Right 3-Point Arc */}
                   <path
                     d="M 98 13 L 88 13 A 24 37 0 0 0 88 87 L 98 87"
                     fill="none"
-                    stroke="#64748B"
-                    strokeWidth="0.8"
+                    stroke="#334155"
+                    strokeWidth="0.85"
                   />
                   {/* Right Hoop and Backboard */}
-                  <line x1="96" y1="43" x2="96" y2="57" stroke="#FFFFFF" strokeWidth="1.2" />
-                  <circle cx="94.5" cy="50" r="2.2" fill="none" stroke="#F97316" strokeWidth="0.8" />
+                  <line x1="96" y1="43" x2="96" y2="57" stroke="#0F172A" strokeWidth="1.4" />
+                  <circle cx="94.5" cy="50" r="2.2" fill="none" stroke="#EA580C" strokeWidth="0.9" />
                 </>
               )}
             </svg>
@@ -2504,15 +2508,15 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
                   }}
                   className={`absolute w-8 h-8 rounded-full flex items-center justify-center font-extrabold text-xs shadow-lg transition-transform select-none touch-none ${
                     isPlaying ? 'cursor-default transition-all duration-75' : 'cursor-grab active:cursor-grabbing'
-                  } ${activeTokenId === token.id ? 'scale-125 z-30 ring-2 ring-white' : 'z-20'}`}
+                  } ${activeTokenId === token.id ? 'scale-125 z-30 ring-2 ring-blue-600 ring-offset-2' : 'z-20'}`}
                 >
                   {token.type === 'playerA' && (
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center border-2 border-white font-bold text-xs shadow-md">
+                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center border-2 border-slate-900 font-bold text-xs shadow-md">
                       {token.label}
                     </div>
                   )}
                   {token.type === 'playerB' && (
-                    <div className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center border-2 border-white font-bold text-xs shadow-md">
+                    <div className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center border-2 border-slate-900 font-bold text-xs shadow-md">
                       {token.label}
                     </div>
                   )}
