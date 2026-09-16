@@ -31,6 +31,8 @@ import {
   CheckCircle2,
   ChevronRight,
   ArrowRight,
+  Table,
+  X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { UserProfile } from '../types';
@@ -42,6 +44,15 @@ import { ScoutingAiConsultant } from './ScoutingAiConsultant';
 
 interface RivalScoutingViewProps {
   userProfile?: UserProfile | null;
+}
+
+interface PendingExcelImport {
+  workbook: XLSX.WorkBook;
+  fileName: string;
+  sheetNames: string[];
+  team: 'local' | 'visitante';
+  selectedSheet: string;
+  setFeedback: (msg: string | null) => void;
 }
 
 export interface MatchData {
@@ -162,6 +173,9 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
 
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const visitorFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Modal de selección de hoja de cálculo cuando el archivo Excel tiene múltiples pestañas/jornadas
+  const [pendingExcelImport, setPendingExcelImport] = useState<PendingExcelImport | null>(null);
 
   // Clave de almacenamiento en localStorage para la Jornada seleccionada
   const storageKey = selectedJornadaNum ? `coachmind_jornada_scouting_v3_${selectedJornadaNum}` : null;
@@ -337,8 +351,214 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
     });
   };
 
-  // PARSER DE EXCEL ADAPTADO EXACTAMENTE A LA CABECERA DE LA IMAGEN:
-  // [Equipo, fecha, Dorsal, Jugadora, PJ, MIN, PTS, FC/P, TLA, TLI, T2A, T2I, T3A, T3I]
+  // PARSER DE EXCEL MODULAR POR HOJA (WorkSheet)
+  const extractPlayersFromWorksheet = (
+    ws: XLSX.WorkSheet,
+    team: 'local' | 'visitante',
+    defaultTeamName: string
+  ): { players: PlayerStatsData[]; detectedTeamName: string } => {
+    const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    if (!rows || rows.length === 0) {
+      return { players: [], detectedTeamName: '' };
+    }
+
+    let startRowIdx = 0;
+    let colMap: Record<string, number> = {};
+
+    const headerRow = rows[0] || [];
+    const isHeader = headerRow.some(
+      (c: any) =>
+        typeof c === 'string' &&
+        (c.toLowerCase().includes('equipo') ||
+          c.toLowerCase().includes('dorsal') ||
+          c.toLowerCase().includes('jugadora') ||
+          c.toLowerCase().includes('pts') ||
+          c.toLowerCase().includes('tla'))
+    );
+
+    if (isHeader) {
+      startRowIdx = 1;
+      headerRow.forEach((cell: any, idx: number) => {
+        if (!cell) return;
+        const norm = cell.toString().trim().toLowerCase();
+        if (norm === 'equipo' || norm.includes('club') || norm.includes('team')) colMap['equipo'] = idx;
+        else if (norm === 'fecha' || norm.includes('date')) colMap['fecha'] = idx;
+        else if (norm === 'dorsal' || norm === '#' || norm === 'num' || norm === 'núm' || norm === 'no') colMap['dorsal'] = idx;
+        else if (norm === 'jugadora' || norm === 'jugador' || norm === 'nombre' || norm === 'player') colMap['jugadora'] = idx;
+        else if (norm === 'pj') colMap['pj'] = idx;
+        else if (norm === 'min') colMap['min'] = idx;
+        else if (norm === 'pts' || norm === 'puntos') colMap['pts'] = idx;
+        else if (norm.includes('fc') || norm.includes('falta') || norm.includes('fc/p')) colMap['fc_p'] = idx;
+        else if (norm === 'tla' || norm === 'tl_a') colMap['tla'] = idx;
+        else if (norm === 'tli' || norm === 'tl_i') colMap['tli'] = idx;
+        else if (norm === 't2a' || norm === 't2_a') colMap['t2a'] = idx;
+        else if (norm === 't2i' || norm === 't2_i') colMap['t2i'] = idx;
+        else if (norm === 't3a' || norm === 't3_a') colMap['t3a'] = idx;
+        else if (norm === 't3i' || norm === 't3_i') colMap['t3i'] = idx;
+      });
+    }
+
+    const getIdx = (key: string, fallback: number) => (colMap[key] !== undefined ? colMap[key] : fallback);
+
+    const idxEquipo = getIdx('equipo', 0);
+    const idxFecha = getIdx('fecha', 1);
+    const idxDorsal = getIdx('dorsal', 2);
+    const idxJugadora = getIdx('jugadora', 3);
+    const idxPJ = getIdx('pj', 4);
+    const idxMin = getIdx('min', 5);
+    const idxPts = getIdx('pts', 6);
+    const idxFC = getIdx('fc_p', 7);
+    const idxTLA = getIdx('tla', 8);
+    const idxTLI = getIdx('tli', 9);
+    const idxT2A = getIdx('t2a', 10);
+    const idxT2I = getIdx('t2i', 11);
+    const idxT3A = getIdx('t3a', 12);
+    const idxT3I = getIdx('t3i', 13);
+
+    const newPlayers: PlayerStatsData[] = [];
+    let detectedTeamName = '';
+
+    for (let i = startRowIdx; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || r.length === 0) continue;
+
+      const getVal = (idx: number) => (r[idx] !== undefined && r[idx] !== null ? r[idx].toString().trim() : '');
+      const getNum = (idx: number) => {
+        const raw = getVal(idx);
+        if (!raw) return 0;
+        const parsed = parseInt(raw.replace(/[^\d]/g, ''), 10);
+        return isNaN(parsed) ? 0 : Math.max(0, parsed);
+      };
+
+      const dorsal = getVal(idxDorsal);
+      const jugadora = getVal(idxJugadora);
+      const equipo = getVal(idxEquipo) || defaultTeamName || 'Equipo';
+      const fecha = getVal(idxFecha) || new Date().toISOString().split('T')[0];
+
+      if (!jugadora && !dorsal) continue;
+      if (jugadora.toLowerCase().includes('total') || jugadora.toLowerCase().includes('equipo')) continue;
+
+      if (equipo && !detectedTeamName) {
+        detectedTeamName = equipo;
+      }
+
+      const pj = getNum(idxPJ) || 1;
+      const min = getNum(idxMin) || 0;
+      const fc_p = getNum(idxFC) || 0;
+      const tla = getNum(idxTLA) || 0;
+      const tli = getNum(idxTLI) || tla;
+      const t2a = getNum(idxT2A) || 0;
+      const t2i = getNum(idxT2I) || t2a;
+      const t3a = getNum(idxT3A) || 0;
+      const t3i = getNum(idxT3I) || t3a;
+
+      let pts = getNum(idxPts);
+      if (pts === 0 && (tla > 0 || t2a > 0 || t3a > 0)) {
+        pts = tla * 1 + t2a * 2 + t3a * 3;
+      }
+
+      newPlayers.push({
+        id: `p_excel_${team}_${Date.now()}_${i}`,
+        equipo,
+        fecha,
+        dorsal,
+        jugadora: jugadora || `Jugadora #${dorsal}`,
+        pj,
+        min,
+        pts,
+        fc_p,
+        tla,
+        tli,
+        t2a,
+        t2i,
+        t3a,
+        t3i,
+        team,
+      });
+    }
+
+    return { players: newPlayers, detectedTeamName };
+  };
+
+  // Buscar hoja recomendada que coincida con la jornada seleccionada (ej. "Jornada 3", "J3", "J 3", "Fecha 3")
+  const findBestMatchingSheet = (sheetNames: string[], jornadaNum: number | null): string => {
+    if (!sheetNames || sheetNames.length === 0) return '';
+    if (!jornadaNum) return sheetNames[0];
+
+    const targetStr = String(jornadaNum);
+    for (const name of sheetNames) {
+      const clean = name.toLowerCase().replace(/[\s\-_]/g, '');
+      if (
+        clean === `jornada${targetStr}` ||
+        clean === `j${targetStr}` ||
+        clean === `jornada0${targetStr}` ||
+        clean === `j0${targetStr}` ||
+        clean === `fecha${targetStr}`
+      ) {
+        return name;
+      }
+    }
+
+    for (const name of sheetNames) {
+      const clean = name.toLowerCase();
+      if (
+        clean.includes(`jornada ${targetStr}`) ||
+        clean.includes(`j ${targetStr}`) ||
+        clean.includes(`j${targetStr}`)
+      ) {
+        return name;
+      }
+    }
+
+    return sheetNames[0];
+  };
+
+  // Aplicar importación de una hoja específica a la jornada actual
+  const applySheetImport = (
+    wb: XLSX.WorkBook,
+    sheetName: string,
+    team: 'local' | 'visitante',
+    fileName: string,
+    setFeedback: (msg: string | null) => void
+  ) => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) {
+      setFeedback(`No se pudo encontrar la hoja "${sheetName}" en el archivo.`);
+      return;
+    }
+
+    const defaultTeamName = team === 'local' ? (currentMatch.localTeam || 'Local') : (currentMatch.visitorTeam || 'Visitante');
+    const { players: newPlayers, detectedTeamName } = extractPlayersFromWorksheet(ws, team, defaultTeamName);
+
+    if (newPlayers.length > 0) {
+      const isLocal = team === 'local';
+
+      setJornadaData((prev) => {
+        const updatedMatches = [...prev.matches] as [MatchData, MatchData, MatchData];
+        const match = { ...updatedMatches[activeMatchIndex] };
+
+        if (isLocal) {
+          match.localPlayers = newPlayers;
+          if (detectedTeamName) match.localTeam = detectedTeamName;
+        } else {
+          match.visitorPlayers = newPlayers;
+          if (detectedTeamName) match.visitorTeam = detectedTeamName;
+        }
+
+        updatedMatches[activeMatchIndex] = match;
+        return { ...prev, matches: updatedMatches };
+      });
+
+      setFeedback(
+        `¡Hoja "${sheetName}" importada con éxito! Se cargaron ${newPlayers.length} jugadoras con sus estadísticas completas.`
+      );
+      setTimeout(() => setFeedback(null), 6000);
+    } else {
+      setFeedback(`La hoja "${sheetName}" no contiene registros válidos de jugadoras.`);
+    }
+  };
+
+  // Subida de archivo Excel con soporte de selección de hoja
   const parseExcelTeamData = (
     file: File,
     team: 'local' | 'visitante',
@@ -349,157 +569,30 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsName = wb.SheetNames[0];
-        const ws = wb.Sheets[wsName];
-        const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-        if (!rows || rows.length === 0) {
-          setFeedback('El archivo Excel está vacío.');
+        if (!wb.SheetNames || wb.SheetNames.length === 0) {
+          setFeedback('El archivo Excel no contiene hojas de cálculo.');
           return;
         }
 
-        let startRowIdx = 0;
-        let colMap: Record<string, number> = {};
-
-        const headerRow = rows[0] || [];
-        const isHeader = headerRow.some(
-          (c: any) =>
-            typeof c === 'string' &&
-            (c.toLowerCase().includes('equipo') ||
-              c.toLowerCase().includes('dorsal') ||
-              c.toLowerCase().includes('jugadora') ||
-              c.toLowerCase().includes('pts') ||
-              c.toLowerCase().includes('tla'))
-        );
-
-        if (isHeader) {
-          startRowIdx = 1;
-          headerRow.forEach((cell: any, idx: number) => {
-            if (!cell) return;
-            const norm = cell.toString().trim().toLowerCase();
-            if (norm === 'equipo' || norm.includes('club') || norm.includes('team')) colMap['equipo'] = idx;
-            else if (norm === 'fecha' || norm.includes('date')) colMap['fecha'] = idx;
-            else if (norm === 'dorsal' || norm === '#' || norm === 'num' || norm === 'núm' || norm === 'no') colMap['dorsal'] = idx;
-            else if (norm === 'jugadora' || norm === 'jugador' || norm === 'nombre' || norm === 'player') colMap['jugadora'] = idx;
-            else if (norm === 'pj') colMap['pj'] = idx;
-            else if (norm === 'min') colMap['min'] = idx;
-            else if (norm === 'pts' || norm === 'puntos') colMap['pts'] = idx;
-            else if (norm.includes('fc') || norm.includes('falta') || norm.includes('fc/p')) colMap['fc_p'] = idx;
-            else if (norm === 'tla' || norm === 'tl_a') colMap['tla'] = idx;
-            else if (norm === 'tli' || norm === 'tl_i') colMap['tli'] = idx;
-            else if (norm === 't2a' || norm === 't2_a') colMap['t2a'] = idx;
-            else if (norm === 't2i' || norm === 't2_i') colMap['t2i'] = idx;
-            else if (norm === 't3a' || norm === 't3_a') colMap['t3a'] = idx;
-            else if (norm === 't3i' || norm === 't3_i') colMap['t3i'] = idx;
-          });
-        }
-
-        const getIdx = (key: string, fallback: number) => (colMap[key] !== undefined ? colMap[key] : fallback);
-
-        const idxEquipo = getIdx('equipo', 0);
-        const idxFecha = getIdx('fecha', 1);
-        const idxDorsal = getIdx('dorsal', 2);
-        const idxJugadora = getIdx('jugadora', 3);
-        const idxPJ = getIdx('pj', 4);
-        const idxMin = getIdx('min', 5);
-        const idxPts = getIdx('pts', 6);
-        const idxFC = getIdx('fc_p', 7);
-        const idxTLA = getIdx('tla', 8);
-        const idxTLI = getIdx('tli', 9);
-        const idxT2A = getIdx('t2a', 10);
-        const idxT2I = getIdx('t2i', 11);
-        const idxT3A = getIdx('t3a', 12);
-        const idxT3I = getIdx('t3i', 13);
-
-        const newPlayers: PlayerStatsData[] = [];
-        let detectedTeamName = '';
-
-        for (let i = startRowIdx; i < rows.length; i++) {
-          const r = rows[i];
-          if (!r || r.length === 0) continue;
-
-          const getVal = (idx: number) => (r[idx] !== undefined && r[idx] !== null ? r[idx].toString().trim() : '');
-          const getNum = (idx: number) => {
-            const raw = getVal(idx);
-            if (!raw) return 0;
-            const parsed = parseInt(raw.replace(/[^\d]/g, ''), 10);
-            return isNaN(parsed) ? 0 : Math.max(0, parsed);
-          };
-
-          const dorsal = getVal(idxDorsal);
-          const jugadora = getVal(idxJugadora);
-          const equipo = getVal(idxEquipo) || (team === 'local' ? currentMatch.localTeam : currentMatch.visitorTeam) || 'Equipo';
-          const fecha = getVal(idxFecha) || new Date().toISOString().split('T')[0];
-
-          if (!jugadora && !dorsal) continue;
-          if (jugadora.toLowerCase().includes('total') || jugadora.toLowerCase().includes('equipo')) continue;
-
-          if (equipo && !detectedTeamName) {
-            detectedTeamName = equipo;
-          }
-
-          const pj = getNum(idxPJ) || 1;
-          const min = getNum(idxMin) || 0;
-          const fc_p = getNum(idxFC) || 0;
-          const tla = getNum(idxTLA) || 0;
-          const tli = getNum(idxTLI) || tla;
-          const t2a = getNum(idxT2A) || 0;
-          const t2i = getNum(idxT2I) || t2a;
-          const t3a = getNum(idxT3A) || 0;
-          const t3i = getNum(idxT3I) || t3a;
-
-          let pts = getNum(idxPts);
-          if (pts === 0 && (tla > 0 || t2a > 0 || t3a > 0)) {
-            pts = tla * 1 + t2a * 2 + t3a * 3;
-          }
-
-          newPlayers.push({
-            id: `p_excel_${team}_${Date.now()}_${i}`,
-            equipo,
-            fecha,
-            dorsal,
-            jugadora: jugadora || `Jugadora #${dorsal}`,
-            pj,
-            min,
-            pts,
-            fc_p,
-            tla,
-            tli,
-            t2a,
-            t2i,
-            t3a,
-            t3i,
-            team,
-          });
-        }
-
-        if (newPlayers.length > 0) {
-          const isLocal = team === 'local';
-
-          setJornadaData((prev) => {
-            const updatedMatches = [...prev.matches] as [MatchData, MatchData, MatchData];
-            const match = { ...updatedMatches[activeMatchIndex] };
-
-            if (isLocal) {
-              match.localPlayers = newPlayers;
-              if (detectedTeamName) match.localTeam = detectedTeamName;
-            } else {
-              match.visitorPlayers = newPlayers;
-              if (detectedTeamName) match.visitorTeam = detectedTeamName;
-            }
-
-            updatedMatches[activeMatchIndex] = match;
-            return { ...prev, matches: updatedMatches };
-          });
-
-          setFeedback(`¡Excel procesado con éxito! Se cargaron ${newPlayers.length} jugadoras con todas las estadísticas.`);
-          setTimeout(() => setFeedback(null), 5000);
+        if (wb.SheetNames.length === 1) {
+          // Si tiene solo 1 hoja, procesarla directamente
+          applySheetImport(wb, wb.SheetNames[0], team, file.name, setFeedback);
         } else {
-          setFeedback('No se encontraron registros de jugadoras válidos en el archivo Excel.');
+          // Si tiene múltiples hojas (por ejemplo Jornada 1, Jornada 2, etc.), abrir selector
+          const bestMatch = findBestMatchingSheet(wb.SheetNames, selectedJornadaNum);
+          setPendingExcelImport({
+            workbook: wb,
+            fileName: file.name,
+            sheetNames: wb.SheetNames,
+            team,
+            selectedSheet: bestMatch,
+            setFeedback,
+          });
         }
       } catch (err) {
         console.error('Error al procesar Excel:', err);
-        setFeedback('Error al leer el archivo Excel. Verifica que las columnas coincidan con el formato.');
+        setFeedback('Error al leer el archivo Excel. Verifica que sea un archivo .xlsx, .xls o .csv válido.');
       }
     };
     reader.readAsBinaryString(file);
@@ -2065,6 +2158,198 @@ export const RivalScoutingView: React.FC<RivalScoutingViewProps> = ({ userProfil
           </div>
         )}
       </div>
+
+      {/* MODAL INTERACTIVO: SELECTOR DE HOJA DE EXCEL */}
+      {pendingExcelImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Cabecera del Modal */}
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-xs shrink-0">
+                  <FileSpreadsheet className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">
+                    Seleccionar Hoja / Jornada de Excel
+                  </h3>
+                  <p className="text-xs text-emerald-100 font-medium line-clamp-1">
+                    Archivo: <span className="font-mono font-bold text-white">{pendingExcelImport.fileName}</span> &bull; Destino: <span className="font-bold underline text-white">{pendingExcelImport.team === 'local' ? (currentMatch.localTeam || 'Equipo Local') : (currentMatch.visitorTeam || 'Equipo Visitante')}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingExcelImport(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors cursor-pointer"
+                title="Cerrar modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Contenido / Lista de Hojas y Preview */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs font-semibold flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p>
+                  Tu archivo Excel contiene <strong>{pendingExcelImport.sheetNames.length} hojas</strong>. Elige la pestaña correspondiente a la jornada o equipo que quieres cargar:
+                </p>
+              </div>
+
+              {/* Selector de Hojas (Pestañas) */}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                  Hojas encontradas en el libro Excel:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-48 overflow-y-auto p-1">
+                  {pendingExcelImport.sheetNames.map((sheetName) => {
+                    const isSelected = pendingExcelImport.selectedSheet === sheetName;
+                    const ws = pendingExcelImport.workbook.Sheets[sheetName];
+                    const defaultName = pendingExcelImport.team === 'local' ? (currentMatch.localTeam || 'Local') : (currentMatch.visitorTeam || 'Visitante');
+                    const parsed = ws ? extractPlayersFromWorksheet(ws, pendingExcelImport.team, defaultName) : { players: [] };
+                    const isRecommended = selectedJornadaNum !== null && sheetName.toLowerCase().replace(/[\s\-_]/g, '').includes(`j${selectedJornadaNum}`);
+
+                    return (
+                      <button
+                        key={sheetName}
+                        type="button"
+                        onClick={() =>
+                          setPendingExcelImport((prev) => (prev ? { ...prev, selectedSheet: sheetName } : null))
+                        }
+                        className={`p-3 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                          isSelected
+                            ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/30 shadow-xs'
+                            : 'bg-slate-50/60 hover:bg-slate-100 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                isSelected ? 'bg-emerald-600' : 'bg-slate-300'
+                              }`}
+                            />
+                            <span className="font-extrabold text-sm text-slate-900 truncate">
+                              {sheetName}
+                            </span>
+                          </div>
+                          {isRecommended && (
+                            <span className="text-[10px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full shrink-0 shadow-xs">
+                              ⭐ J{selectedJornadaNum}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 pl-4.5">
+                          <span>{parsed.players.length > 0 ? `${parsed.players.length} jugadoras` : '0 registros'}</span>
+                          {isSelected && <span className="font-bold text-emerald-700">Seleccionada</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Vista previa en directo de la hoja seleccionada */}
+              {(() => {
+                const curWs = pendingExcelImport.workbook.Sheets[pendingExcelImport.selectedSheet];
+                const defTeam = pendingExcelImport.team === 'local' ? (currentMatch.localTeam || 'Local') : (currentMatch.visitorTeam || 'Visitante');
+                const previewData = curWs ? extractPlayersFromWorksheet(curWs, pendingExcelImport.team, defTeam) : { players: [], detectedTeamName: '' };
+                const samplePlayers = previewData.players.slice(0, 5);
+
+                return (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Table className="w-4 h-4 text-emerald-700" />
+                        <h4 className="text-xs font-black text-slate-800">
+                          Vista previa de: <span className="text-emerald-700 underline">{pendingExcelImport.selectedSheet}</span>
+                        </h4>
+                      </div>
+                      <span className="text-xs font-bold text-slate-600">
+                        Total detectado: <strong>{previewData.players.length}</strong> jugadoras
+                      </span>
+                    </div>
+
+                    {samplePlayers.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                        <table className="w-full text-[11px] text-left">
+                          <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                            <tr>
+                              <th className="py-1.5 px-2.5 text-center">Dorsal</th>
+                              <th className="py-1.5 px-2.5">Jugadora</th>
+                              <th className="py-1.5 px-2 text-center">Min</th>
+                              <th className="py-1.5 px-2 text-center">Pts</th>
+                              <th className="py-1.5 px-2 text-center">TL</th>
+                              <th className="py-1.5 px-2 text-center">T2</th>
+                              <th className="py-1.5 px-2 text-center">T3</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                            {samplePlayers.map((p, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="py-1 px-2.5 text-center font-bold text-slate-900">
+                                  #{p.dorsal || '-'}
+                                </td>
+                                <td className="py-1 px-2.5 font-semibold text-slate-900 truncate max-w-[150px]">
+                                  {p.jugadora}
+                                </td>
+                                <td className="py-1 px-2 text-center text-slate-600">{p.min}&apos;</td>
+                                <td className="py-1 px-2 text-center font-black text-emerald-700">{p.pts}</td>
+                                <td className="py-1 px-2 text-center text-slate-600">{p.tla}/{p.tli}</td>
+                                <td className="py-1 px-2 text-center text-slate-600">{p.t2a}/{p.t2i}</td>
+                                <td className="py-1 px-2 text-center text-slate-600">{p.t3a}/{p.t3i}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {previewData.players.length > 5 && (
+                          <div className="py-1 px-3 bg-slate-50 text-[10px] text-slate-500 text-center font-medium border-t border-slate-100">
+                            ... y {previewData.players.length - 5} jugadoras más en esta hoja.
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold text-center">
+                        No se detectaron jugadoras con datos válidos en la hoja &quot;{pendingExcelImport.selectedSheet}&quot;.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Pie del Modal con Acciones */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingExcelImport(null)}
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  applySheetImport(
+                    pendingExcelImport.workbook,
+                    pendingExcelImport.selectedSheet,
+                    pendingExcelImport.team,
+                    pendingExcelImport.fileName,
+                    pendingExcelImport.setFeedback
+                  );
+                  setPendingExcelImport(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/25 transition-all hover:scale-[1.02] cursor-pointer flex items-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Importar Hoja &quot;{pendingExcelImport.selectedSheet}&quot;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
