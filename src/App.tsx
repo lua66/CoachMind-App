@@ -5,6 +5,7 @@ import { ViewMode, SavedTraining, Player, MatchRecord, UserProfile, CalendarEven
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { CoachView } from './components/CoachView';
+import { AnnualPlanningView } from './components/AnnualPlanningView';
 import { CalendarView } from './components/CalendarView';
 import { PhilosophyView } from './components/PhilosophyView';
 import { TrainingsView } from './components/TrainingsView';
@@ -654,6 +655,12 @@ export default function App() {
             onOpenRegisterModal={() => setIsRegistrationModalOpen(true)}
             onOpenFichaLockModal={() => handleOpenTrialModal('ficha_entrenador')}
             onClearProfile={handleClearProfile}
+          />
+        )}
+
+        {currentView === 'annual-planning' && (
+          <AnnualPlanningView
+            userProfile={userProfile}
           />
         )}
 

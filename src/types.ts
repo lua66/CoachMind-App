@@ -28,6 +28,7 @@ export interface UserProfile {
 export type ViewMode =
   | 'dashboard'
   | 'coach'
+  | 'annual-planning'
   | 'calendar'
   | 'philosophy'
   | 'trainings'

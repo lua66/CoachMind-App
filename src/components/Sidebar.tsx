@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   CalendarDays,
+  CalendarRange,
   Compass,
   Calendar,
   BarChart3,
@@ -71,6 +72,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'coach' as ViewMode,
       label: 'Entrenador',
       icon: Award,
+    },
+    {
+      id: 'annual-planning' as ViewMode,
+      label: 'Planificación anual',
+      icon: CalendarRange,
     },
     {
       id: 'calendar' as ViewMode,
