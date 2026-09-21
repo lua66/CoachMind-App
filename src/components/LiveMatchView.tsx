@@ -504,7 +504,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
       const updated = prev.map((r) => {
         if (r.id !== playerId) return r;
 
-        targetJersey = r.jerseyNumber;
+        targetJersey = String(r.jerseyNumber ?? '');
         targetName = r.name;
 
         const currentEvents = r.quarterEvents?.[quarter] || [];
@@ -2060,10 +2060,11 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({
                               {player.name}
                             </span>
                             {player.isStartingFive && (
-                              <Star
-                                className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-400 shrink-0"
-                                title="Titular (Quinteto Inicial)"
-                              />
+                              <span title="Titular (Quinteto Inicial)">
+                                <Star
+                                  className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-400 shrink-0"
+                                />
+                              </span>
                             )}
                           </div>
 

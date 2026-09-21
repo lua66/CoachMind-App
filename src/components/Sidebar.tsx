@@ -22,7 +22,9 @@ import {
   Timer,
   Target,
 } from 'lucide-react';
-import { ViewMode, UserProfile } from '../types';
+import { ViewMode, UserProfile, CoachPhilosophy } from '../types';
+import { validatePhilosophyComplete, diffPhilosophy } from '../services/philosophyService';
+import { planningService } from '../services/planningService';
 
 interface SidebarProps {
   currentView: ViewMode;
@@ -37,6 +39,7 @@ interface SidebarProps {
   authUser?: any;
   onSignOut?: () => void;
   onClearProfile?: () => void;
+  coachPhilosophy?: CoachPhilosophy | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -52,8 +55,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   authUser,
   onSignOut,
   onClearProfile,
+  coachPhilosophy,
 }) => {
   const [copiedCleanLink, setCopiedCleanLink] = React.useState(false);
+
+  // Compute philosophy state for navigation indicators
+  const philosophyValidation = validatePhilosophyComplete(coachPhilosophy);
+  const isPhilosophyComplete = philosophyValidation.complete;
+
+  let hasSnapshotDiff = false;
+  try {
+    const season = planningService.getSeason();
+    if (season?.philosophySnapshot && coachPhilosophy && isPhilosophyComplete) {
+      const diffs = diffPhilosophy(coachPhilosophy, season.philosophySnapshot);
+      hasSnapshotDiff = diffs.length > 0;
+    }
+  } catch {
+    hasSnapshotDiff = false;
+  }
 
   const handleCopyCleanLink = () => {
     const cleanUrl = `${window.location.origin}/?clean=true`;
@@ -75,8 +94,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'annual-planning' as ViewMode,
-      label: 'Planificación anual',
+      label: 'Objetivos de Temporada',
       icon: CalendarRange,
+      customIndicator: !isPhilosophyComplete ? (
+        <span
+          className="flex h-2.5 w-2.5 relative"
+          title="Filosofía pendiente - Completa tu filosofía de entrenador"
+        >
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+        </span>
+      ) : hasSnapshotDiff ? (
+        <span
+          className="flex h-2.5 w-2.5 relative"
+          title="Filosofía actualizada, sincronización pendiente con la temporada"
+        >
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+        </span>
+      ) : undefined,
     },
     {
       id: 'calendar' as ViewMode,
@@ -87,6 +123,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'philosophy' as ViewMode,
       label: 'Filosofía del Entrenador',
       icon: Compass,
+      badge: !isPhilosophyComplete ? 'Incompleta' : undefined,
+      badgeClass: 'bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px]',
     },
     {
       id: 'players' as ViewMode,
@@ -220,21 +258,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>{item.label}</span>
               </div>
 
-              {item.badge !== undefined && (
-                <span
-                  className={`px-2 py-0.5 text-xs font-bold rounded-full ${
-                    isActive
-                      ? 'bg-blue-700 text-white'
-                      : 'bg-slate-800 text-slate-300 group-hover:bg-slate-700'
-                  }`}
-                >
-                  {item.badge}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {item.customIndicator}
 
-              {item.highlight && !isActive && (
-                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-              )}
+                {item.badge !== undefined && (
+                  <span
+                    className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                      (item as any).badgeClass
+                        ? (item as any).badgeClass
+                        : isActive
+                        ? 'bg-blue-700 text-white'
+                        : 'bg-slate-800 text-slate-300 group-hover:bg-slate-700'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+
+                {item.highlight && !isActive && (
+                  <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                )}
+              </div>
             </button>
           );
         })}

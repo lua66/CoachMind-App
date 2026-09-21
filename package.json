@@ -9,6 +9,7 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.cjs",
+    "test": "tsx tests/step3_philosophy_validation.test.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "pg": "^8.22.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.10.0",
     "xlsx": "^0.18.5"
   },

@@ -615,6 +615,7 @@ export default function App() {
         authUser={authUser}
         onSignOut={handleSignOut}
         onClearProfile={handleClearProfile}
+        coachPhilosophy={coachPhilosophy}
       />
 
       {/* Main Content Workspace Area */}
@@ -661,6 +662,8 @@ export default function App() {
         {currentView === 'annual-planning' && (
           <AnnualPlanningView
             userProfile={userProfile}
+            coachPhilosophy={coachPhilosophy}
+            onNavigateToPhilosophy={() => setCurrentView('philosophy')}
           />
         )}
 
@@ -683,6 +686,7 @@ export default function App() {
             userProfile={userProfile}
             onOpenTrialModal={handleOpenTrialModal}
             players={players}
+            onNavigate={setCurrentView}
           />
         )}
 

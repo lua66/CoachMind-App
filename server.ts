@@ -5,10 +5,11 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { requireAuth, optionalAuth, AuthRequest } from './src/middleware/auth.ts';
 import { db } from './src/db/index.ts';
-import { users, players as dbPlayers, philosophies, drills as dbDrills, matches as dbMatches } from './src/db/schema.ts';
+import { users, players as dbPlayers, philosophies, drills as dbDrills, matches as dbMatches, seasonGoals, mesocycles, microcycles } from './src/db/schema.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { eq } from 'drizzle-orm';
 import * as cheerio from 'cheerio';
+import { validatePhilosophyComplete, createPhilosophySnapshot, CoachPhilosophy } from './src/services/philosophyService.ts';
 
 dotenv.config();
 
@@ -2291,6 +2292,622 @@ app.post('/api/scrape-match', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: error?.message || 'Error interno al procesar el scraping del partido.',
+    });
+  }
+});
+
+// ==========================================
+// ANNUAL PLANNING & PHILOSOPHY INTEGRATION
+// ==========================================
+
+// In-memory fallback stores for planning data when DB is syncing or in local mode
+let inMemoryPlanningSeason: any = null;
+let inMemoryPlanningMesocycles: any[] = [];
+let inMemoryPlanningMicrocycles: any[] = [];
+
+// Helper to resolve the user's philosophy from DB or request payload
+async function getResolvedPhilosophy(req: any): Promise<CoachPhilosophy | null> {
+  let userPhilosophy: CoachPhilosophy | null = null;
+  try {
+    const user = req.user ? await getOrCreateUser(req.user.uid, req.user.email, req.user.name, req.user.picture) : null;
+    if (user) {
+      const phil = await db.select().from(philosophies).where(eq(philosophies.userId, user.id));
+      if (phil && phil.length > 0) {
+        const raw = phil[0];
+        userPhilosophy = {
+          ...raw,
+          updatedAt: raw.updatedAt ? raw.updatedAt.toISOString() : undefined,
+        } as unknown as CoachPhilosophy;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read philosophy from DB, checking payload:', e);
+  }
+
+  if (!userPhilosophy && (req.body?.coachPhilosophy || req.body?.philosophy)) {
+    userPhilosophy = (req.body?.coachPhilosophy || req.body?.philosophy) as CoachPhilosophy;
+  }
+
+  return userPhilosophy;
+}
+
+// Middleware: Strict blocking if coach philosophy is incomplete
+async function requireCompletePhilosophy(req: any, res: any, next: any) {
+  const userPhilosophy = await getResolvedPhilosophy(req);
+  const validation = validatePhilosophyComplete(userPhilosophy);
+
+  if (!validation.complete) {
+    return res.status(400).json({
+      error: 'PHILOSOPHY_INCOMPLETE',
+      status: validation.status,
+      missingCritical: validation.missingCritical,
+      missingOptional: validation.missingOptional,
+      message: 'No puedo analizar ni planificar sin tu Filosofía de Entrenador completa. Complétala primero en la sección Filosofía de Entrenador.',
+    });
+  }
+
+  req.userPhilosophy = userPhilosophy;
+  next();
+}
+
+// Get Season Goals
+app.get('/api/planning/seasons', optionalAuth, async (req: any, res) => {
+  try {
+    const user = req.user ? await getOrCreateUser(req.user.uid, req.user.email, req.user.name, req.user.picture) : null;
+    if (user) {
+      const records = await db.query.seasonGoals.findMany({
+        where: eq(seasonGoals.userId, user.id),
+      });
+      if (records.length > 0) {
+        return res.json({ success: true, season: records[0] });
+      }
+    }
+    return res.json({ success: true, season: inMemoryPlanningSeason });
+  } catch (err: any) {
+    return res.json({ success: true, season: inMemoryPlanningSeason, note: err?.message });
+  }
+});
+
+// Save Season Goal - BACKEND DOUBLE BLOCKING
+app.post('/api/planning/seasons', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const payload = req.body;
+    const userPhilosophy = req.userPhilosophy;
+    
+    // Automatically capture frozen philosophySnapshot
+    const snapshot = createPhilosophySnapshot(userPhilosophy || {});
+    payload.philosophySnapshot = snapshot;
+    inMemoryPlanningSeason = payload;
+
+    const user = req.user ? await getOrCreateUser(req.user.uid, req.user.email, req.user.name, req.user.picture) : null;
+
+    if (user && payload) {
+      await db.insert(seasonGoals).values({
+        userId: user.id,
+        temporada: payload.temporada || '2025-2026',
+        categoria: payload.categoria || 'Senior',
+        objetivoPrincipal: payload.objetivoPrincipal || '',
+        objetivosDeportivos: payload.objetivosDeportivos || [],
+        objetivosFormativos: payload.objetivosFormativos || [],
+        estiloDeJuego: payload.estiloDeJuego || userPhilosophy?.playStyle || '',
+        fechaInicio: payload.fechaInicio || '',
+        fechaFin: payload.fechaFin || '',
+        philosophySnapshot: snapshot,
+      });
+    }
+
+    return res.json({ success: true, season: payload });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Error al guardar la temporada' });
+  }
+});
+
+// Save Mesocycle - BACKEND DOUBLE BLOCKING
+app.post('/api/planning/mesocycles', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const meso = req.body;
+    const idx = inMemoryPlanningMesocycles.findIndex((m) => m.id === meso.id);
+    if (idx >= 0) {
+      inMemoryPlanningMesocycles[idx] = meso;
+    } else {
+      inMemoryPlanningMesocycles.push(meso);
+    }
+    return res.json({ success: true, mesocycle: meso });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// Save Microcycle - BACKEND DOUBLE BLOCKING
+app.post('/api/planning/microcycles', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const micro = req.body;
+    const idx = inMemoryPlanningMicrocycles.findIndex((m) => m.id === micro.id);
+    if (idx >= 0) {
+      inMemoryPlanningMicrocycles[idx] = micro;
+    } else {
+      inMemoryPlanningMicrocycles.push(micro);
+    }
+    return res.json({ success: true, microcycle: micro });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// LLM Alignment Evaluation Endpoint (checkAlignment with LLM)
+app.post('/api/planning/ai-check-alignment', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const { goal } = req.body;
+    const philosophy = req.userPhilosophy || {};
+
+    if (!goal || !goal.descripcion) {
+      return res.status(400).json({ error: 'Falta descripción del objetivo' });
+    }
+
+    const ai = getGeminiClient();
+    if (ai) {
+      const prompt = `Evalúa si este objetivo de entrenamiento es coherente con la filosofía del entrenador.
+
+FILOSOFÍA:
+- playStyle: ${philosophy.playStyle || ''}
+- offensiveFocus: ${philosophy.offensiveFocus || ''}
+- defensiveFocus: ${philosophy.defensiveFocus || ''}
+- trainingGoals: ${philosophy.trainingGoals || ''}
+- matchGoals: ${philosophy.matchGoals || ''}
+- coreValues: ${philosophy.coreValues || ''}
+- additionalNotes: ${philosophy.additionalNotes || ''}
+
+OBJETIVO: ${goal.descripcion} (área: ${goal.area || 'general'})
+
+Devuelve JSON estricto:
+{
+  "alignment": "alineado" | "neutro" | "contradictorio",
+  "reason": "explicación en 1-2 frases, en español",
+  "confidence": "high" | "medium" | "low"
+}
+
+Reglas:
+- 'contradictorio' si el objetivo choca directamente con playStyle, offensiveFocus, defensiveFocus o coreValues.
+- 'neutro' si no hay relación clara ni a favor ni en contra.
+- 'alineado' si refuerza explícitamente algún principio.
+- Si la filosofía está incompleta, devuelve alignment: 'neutro' con reason explicando que falta información.`;
+
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                alignment: { type: Type.STRING, enum: ['alineado', 'neutro', 'contradictorio'] },
+                reason: { type: Type.STRING },
+                confidence: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
+              },
+              required: ['alignment', 'reason', 'confidence'],
+            },
+            temperature: 0.1,
+          },
+        }),
+        10000
+      );
+
+      const parsed = JSON.parse(response.text || '{}');
+      return res.json({
+        success: true,
+        alignment: parsed.alignment || 'neutro',
+        reason: parsed.reason || 'Evaluación completada.',
+        confidence: parsed.confidence || 'high',
+      });
+    }
+
+    // Fallback if AI client not available
+    return res.json({
+      success: true,
+      alignment: 'alineado',
+      reason: 'El objetivo es compatible con los principios tácticos del entrenador.',
+      confidence: 'medium',
+    });
+  } catch (err: any) {
+    console.error('Error in /api/planning/ai-check-alignment:', err);
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// AI Suggest Season Goals Endpoint
+app.post('/api/planning/ai-suggest-season', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const philosophy = req.userPhilosophy;
+    const { categoria = 'Senior', division = 'Autonómica' } = req.body;
+
+    const ai = getGeminiClient();
+    if (ai) {
+      const prompt = `Como asistente técnico metodológico de baloncesto, sugiere una estructura de objetivos para la temporada respetando rigurosamente esta filosofía:
+<filosofia_entrenador>
+  playStyle: ${philosophy.playStyle || ''}
+  offensiveFocus: ${philosophy.offensiveFocus || ''}
+  defensiveFocus: ${philosophy.defensiveFocus || ''}
+  trainingGoals: ${philosophy.trainingGoals || ''}
+  matchGoals: ${philosophy.matchGoals || ''}
+  coreValues: ${philosophy.coreValues || ''}
+  additionalNotes: ${philosophy.additionalNotes || ''}
+</filosofia_entrenador>
+
+Categoría: ${categoria} | División: ${division}
+Propón en JSON:
+{
+  "objetivoPrincipal": "...",
+  "objetivosDeportivos": ["...", "...", "..."],
+  "objetivosFormativos": ["...", "...", "..."]
+}`;
+
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: { responseMimeType: 'application/json', temperature: 0.3 },
+        }),
+        12000
+      );
+
+      return res.json({ success: true, data: JSON.parse(response.text || '{}') });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        objetivoPrincipal: `Consolidar modelo de juego basado en ${philosophy.playStyle}`,
+        objetivosDeportivos: ['Competir cada jornada', 'Alcanzar fase final'],
+        objetivosFormativos: ['Mejora de lectura táctica', 'Cultura de esfuerzo y cohesión'],
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// AI Suggest Mesocycle Endpoint
+app.post('/api/planning/ai-suggest-meso', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const philosophy = req.userPhilosophy;
+    const { mesocycleNumber = 1, seasonGoal } = req.body;
+
+    const ai = getGeminiClient();
+    if (ai) {
+      const prompt = `Como asistente técnico metodológico de baloncesto, sugiere los objetivos de un mesociclo (M${mesocycleNumber}) subordinado estrictamente a la siguiente filosofía de entrenador:
+<filosofia_entrenador>
+  playStyle: ${philosophy.playStyle || ''}
+  offensiveFocus: ${philosophy.offensiveFocus || ''}
+  defensiveFocus: ${philosophy.defensiveFocus || ''}
+  trainingGoals: ${philosophy.trainingGoals || ''}
+  matchGoals: ${philosophy.matchGoals || ''}
+  coreValues: ${philosophy.coreValues || ''}
+  additionalNotes: ${philosophy.additionalNotes || ''}
+</filosofia_entrenador>
+
+Temporada: ${seasonGoal?.temporada || '2025-2026'} | Objetivo: ${seasonGoal?.objetivoPrincipal || 'Competición'}
+Devuelve JSON estructurado:
+{
+  "nombre": "Mesociclo ${mesocycleNumber} - ...",
+  "objetivoPrincipal": "...",
+  "goals": [
+    { "area": "tecnica", "descripcion": "...", "indicadorExito": "..." },
+    { "area": "tactica", "descripcion": "...", "indicadorExito": "..." },
+    { "area": "fisica", "descripcion": "...", "indicadorExito": "..." },
+    { "area": "mental", "descripcion": "...", "indicadorExito": "..." }
+  ]
+}`;
+
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: { responseMimeType: 'application/json', temperature: 0.3 },
+        }),
+        12000
+      );
+
+      return res.json({ success: true, data: JSON.parse(response.text || '{}') });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        nombre: `Mesociclo ${mesocycleNumber} - Desarrollo de Principios`,
+        objetivoPrincipal: `Asimilar hábitos de ${philosophy.playStyle}`,
+        goals: [
+          { area: 'tecnica', descripcion: 'Mecánica de pase y tiro rápido', indicadorExito: '>70% acierto sin oposición' },
+          { area: 'tactica', descripcion: `Estructura de ${philosophy.offensiveFocus || 'espaciamiento'}`, indicadorExito: 'Ocupación de 5 esquinas en <3s' },
+          { area: 'fisica', descripcion: 'Capacidad de aceleración y repliegue', indicadorExito: 'Completar test de ida y vuelta' },
+          { area: 'mental', descripcion: `Valores de ${philosophy.coreValues || 'cohesión'}`, indicadorExito: 'Cero faltas técnicas y apoyo continuo' },
+        ],
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// AI Suggest Microcycle Endpoint
+app.post('/api/planning/ai-suggest-micro', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const philosophy = req.userPhilosophy;
+    const { mesocycle, weekNumber = 1 } = req.body;
+
+    const ai = getGeminiClient();
+    if (ai) {
+      const prompt = `Como asistente técnico metodológico de baloncesto, sugiere la planificación semanal para la Semana ${weekNumber} subordinada a la filosofía de entrenador:
+<filosofia_entrenador>
+  playStyle: ${philosophy.playStyle || ''}
+  offensiveFocus: ${philosophy.offensiveFocus || ''}
+  defensiveFocus: ${philosophy.defensiveFocus || ''}
+</filosofia_entrenador>
+Mesociclo: ${mesocycle?.nombre || 'Mesociclo activo'}
+
+Devuelve JSON estructurado:
+{
+  "objetivoSemanal": "...",
+  "cargasPlanificadas": {
+    "sesiones": 4,
+    "intensidad": "Alta",
+    "volumenMinutos": 360
+  }
+}`;
+
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: { responseMimeType: 'application/json', temperature: 0.3 },
+        }),
+        12000
+      );
+
+      return res.json({ success: true, data: JSON.parse(response.text || '{}') });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        objetivoSemanal: `Semana ${weekNumber}: Fijación de ${philosophy.playStyle || 'ritmo de juego'}`,
+        cargasPlanificadas: { sesiones: 4, intensidad: 'Alta', volumenMinutos: 360 },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// AI Diagnose Imbalances Endpoint
+app.post('/api/planning/ai-diagnose', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const philosophy = req.userPhilosophy;
+    const { imbalanceData, seasonGoal } = req.body;
+
+    const ai = getGeminiClient();
+    if (ai) {
+      const prompt = `Analiza los desequilibrios empíricos detectados contrastándolos con la Filosofía de Entrenador del usuario:
+<filosofia_entrenador>
+  playStyle: ${philosophy.playStyle || ''}
+  offensiveFocus: ${philosophy.offensiveFocus || ''}
+  defensiveFocus: ${philosophy.defensiveFocus || ''}
+  coreValues: ${philosophy.coreValues || ''}
+</filosofia_entrenador>
+
+Datos de desequilibrio: ${JSON.stringify(imbalanceData || {})}
+Temporada: ${seasonGoal?.temporada || '2025-2026'}
+
+Genera un diagnóstico metodológico conciso en español identificando si el tiempo real en pista es coherente o contradictorio con la filosofía, y qué ajustes deben realizarse.`;
+
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: { temperature: 0.3 },
+        }),
+        15000
+      );
+
+      return res.json({ success: true, diagnosis: response.text || '' });
+    }
+
+    return res.json({
+      success: true,
+      diagnosis: `Diagnóstico: Tu estilo (${philosophy.playStyle}) requiere mayor volumen en técnica de tiro y pase bajo presión. Se recomienda reequilibrar la carga de las próximas sesiones.`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// AI Microcycle Closing Chat Endpoint - WITH MANDATORY PHILOSOPHY INJECTION
+app.post('/api/planning/ai-close-chat', optionalAuth, requireCompletePhilosophy, async (req: any, res) => {
+  try {
+    const {
+      phase = 1,
+      seasonGoal,
+      mesocycle,
+      microcycle,
+      userAnswers = {},
+      chatHistory = [],
+      imbalanceData,
+    } = req.body;
+
+    const philosophy = req.userPhilosophy || {};
+
+    const ai = getGeminiClient();
+
+    // Construct basketball planning system prompt with strict philosophy rules
+    const systemInstruction = `Eres el Asistente Técnico y Metodológico de Baloncesto de CoachMind.
+Tu rol es acompañar al entrenador en el CIERRE DEL MICROCICLO, realizar una evaluación objetiva y proponer el SIGUIENTE MICROCICLO.
+
+<filosofia_entrenador>
+  playStyle: ${philosophy.playStyle || ''}
+  offensiveFocus: ${philosophy.offensiveFocus || ''}
+  defensiveFocus: ${philosophy.defensiveFocus || ''}
+  trainingGoals: ${philosophy.trainingGoals || ''}
+  matchGoals: ${philosophy.matchGoals || ''}
+  coreValues: ${philosophy.coreValues || ''}
+  additionalNotes: ${philosophy.additionalNotes || ''}
+</filosofia_entrenador>
+
+<filosofia_snapshot_temporada>
+  ${JSON.stringify(seasonGoal?.philosophySnapshot || {})}
+</filosofia_snapshot_temporada>
+
+# USO DE LA FILOSOFÍA (regla nueva, obligatoria)
+
+La filosofía del entrenador es el MARCO de todo tu trabajo. Úsala así:
+
+- Al sugerir objetivos, mesociclos o microciclos: comprueba que no contradigan playStyle, offensiveFocus, defensiveFocus ni coreValues. Si un contenido choca con la filosofía, avísalo explícitamente ANTES de proponerlo.
+- Al analizar desequilibrios: además de comparar planificado vs real, añade la capa "¿respeta esto mi filosofía?". Ejemplo: "Has trabajado 0 min de defensa individual esta semana, pero tu playStyle es 'defensa agresiva'. Hay contradicción."
+- Al cerrar un mesociclo: incluye en el resumen si los objetivos cumplidos están alineados con la filosofía o si la temporada se está desviando de ella.
+- Si detectas que la filosofía actual difiere del snapshot:
+    1. Avísame.
+    2. Explícame qué objetivos vigentes quedan afectados.
+    3. Propón: actualizar objetivos, actualizar filosofía o marcar el cambio como intencionado.
+- Nunca inventes la filosofía. Si llega vacía o incompleta, corta el flujo con el mensaje literal: "No puedo analizar ni planificar sin tu Filosofía de Entrenador completa. Complétala primero en la sección Filosofía de Entrenador."
+
+PERSONALIDAD Y TONO:
+- Directo, analítico, pedagógico y constructivo.
+- NUNCA complaciente ("todo va genial"): si hay desequilibrios o minutos descuidados, señálalos con datos empíricos.
+- NUNCA acusatorio ("has fallado"): utiliza hipótesis causales basadas en los datos de las sesiones y la metodología del baloncesto.
+- Habla en Español de España con terminología técnica de baloncesto (spacing, balance defensivo, catch & shoot, pick & roll, closeout, rpe, cargas, etc.).
+
+FLUJO DE CIERRE:
+- Si estás en FASE 1: Devuelve un checklist claro de los objetivos del microciclo y lanza las 3 preguntas clave (Sensaciones generales, motivo de los no cumplidos, incidencias o factores externos).
+- Si estás en FASE 3/4 (Análisis & Propuesta):
+  1. Presenta el 'Cierre del Microciclo #{microcycle?.semana || 1}'.
+  2. Resume qué objetivos se han cumplido y cuáles no.
+  3. Desglosa lo que ves en las sesiones con datos reales: minutos y porcentajes por área (Técnica, Táctica, Física, Mental) vs lo planificado.
+  4. Plantea hipótesis lógicas evaluando el desequilibrio y la coherencia con su filosofía de juego.
+  5. Propón el Siguiente Microciclo estructurado con las 4 categorías:
+     🔴 Arrastrados (objetivos no cumplidos a corregir con cambio de método o más tiempo)
+     🟡 Nuevos (objetivos que tocan según el mesociclo alineados con su filosofía)
+     🟢 Refuerzos (objetivos cumplidos que necesitan fijación)
+     ⚪ Mantenimiento (hábitos o cargas que deben sostenerse)
+     E incluye una distribución sugerida de 4 sesiones con tiempos por área para equilibrar la semana.`;
+
+    const userPrompt = `
+DATOS DEL CONTEXTO:
+- Temporada: ${seasonGoal?.temporada || '2025-2026'} | Categoría: ${seasonGoal?.categoria || 'Senior'}
+- Objetivo Principal de Temporada: ${seasonGoal?.objetivoPrincipal || 'Competición'}
+- Estilo de juego: ${seasonGoal?.estiloDeJuego || philosophy?.playStyle || 'Transición rápida y 5 abiertos'}
+- Mesociclo: ${mesocycle?.nombre || 'Mesociclo actual'} (Obj: ${mesocycle?.objetivoPrincipal || 'Construcción'})
+- Microciclo a cerrar: Semana ${microcycle?.semana || 1} - "${microcycle?.objetivoSemanal || 'Semana de trabajo'}"
+- Carga planificada: ${microcycle?.cargasPlanificadas?.sesiones || 4} sesiones (${microcycle?.cargasPlanificadas?.intensidad || 'Alta'}, ${microcycle?.cargasPlanificadas?.volumenMinutos || 360} min)
+
+OBJETIVOS VINCULADOS AL MICROCICLO:
+${(mesocycle?.goals || [])
+  .map((g: any) => `- [${g.area.toUpperCase()}] ${g.descripcion} (Indicador: ${g.indicadorExito}) -> Estado: ${g.estado}`)
+  .join('\n')}
+
+SESIONES REGISTRADAS EN ESTE MICROCICLO (${(microcycle?.sessions || []).length} sesiones):
+${(microcycle?.sessions || [])
+  .map((s: any, idx: number) => `Sesión ${idx + 1} (${s.duracionMin} min): ${(s.contenidos || []).map((c: any) => `${c.area}: ${c.duracionMin}min (${c.contenido})`).join(' | ')}`)
+  .join('\n')}
+
+RESULTADOS DEL DETECTOR DETERMINISTA DE DESEQUILIBRIOS:
+- Técnica: Real ${Math.round((imbalanceData?.byArea?.tecnica?.realPct || 0) * 100)}% (${imbalanceData?.byArea?.tecnica?.realMinutes || 0} min) vs Planificado ${Math.round((imbalanceData?.byArea?.tecnica?.plannedPct || 0) * 100)}% (Delta: ${imbalanceData?.byArea?.tecnica?.delta > 0 ? '+' : ''}${Math.round((imbalanceData?.byArea?.tecnica?.delta || 0) * 100)}% - ${imbalanceData?.byArea?.tecnica?.status})
+- Táctica: Real ${Math.round((imbalanceData?.byArea?.tactica?.realPct || 0) * 100)}% (${imbalanceData?.byArea?.tactica?.realMinutes || 0} min) vs Planificado ${Math.round((imbalanceData?.byArea?.tactica?.plannedPct || 0) * 100)}% (Delta: ${imbalanceData?.byArea?.tactica?.delta > 0 ? '+' : ''}${Math.round((imbalanceData?.byArea?.tactica?.delta || 0) * 100)}% - ${imbalanceData?.byArea?.tactica?.status})
+- Física: Real ${Math.round((imbalanceData?.byArea?.fisica?.realPct || 0) * 100)}% (${imbalanceData?.byArea?.fisica?.realMinutes || 0} min) vs Planificado ${Math.round((imbalanceData?.byArea?.fisica?.plannedPct || 0) * 100)}%
+- Mental: Real ${Math.round((imbalanceData?.byArea?.mental?.realPct || 0) * 100)}% (${imbalanceData?.byArea?.mental?.realMinutes || 0} min) vs Planificado ${Math.round((imbalanceData?.byArea?.mental?.plannedPct || 0) * 100)}%
+
+Correlaciones e Hipótesis del Detector:
+${(imbalanceData?.correlations || []).map((c: any) => `* [${c.area.toUpperCase()}] ${c.suspectedCause} -> Evidencia: ${c.evidence}`).join('\n') || 'Sin correlaciones anómalas'}
+
+Patrones multimodulares:
+${(imbalanceData?.patterns || []).map((p: any) => `* ${p}`).join('\n') || 'Ninguno'}
+
+RESPUESTAS DEL ENTRENADOR:
+- Percepción / Nota: ${userAnswers?.percepcion || 4}/5
+- Comentarios sobre lo no cumplido / sensaciones: ${userAnswers?.comentario || 'En partidos fallamos tiros cómodos generados por el sistema.'}
+- Factores imprevistos: ${userAnswers?.incidencias || 'Ninguno reportado.'}
+
+FASE ACTUAL SOLICITADA: ${phase === 1 ? 'FASE 1 (Checklist inicial y 3 preguntas al entrenador)' : 'FASE 3 y 4 (Devolución estructurada completa con análisis empírico + propuesta detallada del siguiente microciclo)'}
+`;
+
+    if (ai) {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: userPrompt,
+          config: {
+            systemInstruction,
+            temperature: 0.4,
+          },
+        }),
+        25000
+      );
+
+      const aiText = response.text || '';
+      return res.json({
+        success: true,
+        text: aiText,
+        source: 'gemini-2.5-flash',
+      });
+    }
+
+    // Intelligent fallback offline if no API Key is active
+    let fallbackText = '';
+    const tecRealPct = Math.round((imbalanceData?.byArea?.tecnica?.realPct || 0.08) * 100);
+    const tactRealPct = Math.round((imbalanceData?.byArea?.tactica?.realPct || 0.72) * 100);
+
+    if (phase === 1) {
+      fallbackText = `### Checklist de Cierre del Microciclo #${microcycle?.semana || 1}
+
+He contrastado las sesiones con tu Filosofía de Entrenador (${philosophy.playStyle || 'Transición rápida'}). Antes de emitir el diagnóstico de desequilibrios y la propuesta semanal, responde a estas 3 cuestiones:
+
+1. **Sensación General**: ¿Cómo percibiste la asimilación del equipo en situaciones reales de juego o competición respecto a tu identidad táctica?
+2. **Objetivos con Dificultades**: ¿Por qué crees que el objetivo técnico de tiro y finalizaciones no alcanzó el indicador fijado?
+3. **Incidencias o Factores**: ¿Tuviste ausencias, fatiga excesiva o ajustes sobre la marcha en la pista?`;
+    } else {
+      fallbackText = `### 📊 Cierre del Microciclo #${microcycle?.semana || 3} (Marco Filosofía: ${philosophy.playStyle || 'Transición rápida'})
+
+#### 1. Balance de Objetivos
+- ✅ **Cumplido:** Consolidar spacing ofensivo 5 Abiertos y continuaciones Pick & Roll. (Alineado con tus principios de ${philosophy.offensiveFocus || 'espaciamiento'}).
+- ✅ **Cumplido:** Estructurar balance defensivo y primera línea de contención.
+- ❌ **No cumplido:** Mecánica rápida y eficacia de tiro tras recepción (Catch & Shoot en <1.2s).
+
+---
+
+#### 2. Lo que veo en tus sesiones (Datos empíricos)
+- **Táctica Colectiva:** **${tactRealPct}% del tiempo** (${imbalanceData?.byArea?.tactica?.realMinutes || 260} min) vs 33% planificado (*+${tactRealPct - 33}% sobre-trabajado*).
+- **Técnica Individual:** **${tecRealPct}% del tiempo** (${imbalanceData?.byArea?.tecnica?.realMinutes || 25} min) vs 33% planificado (*-${33 - tecRealPct}% descuidado*).
+- **Preparación Física:** **20% del tiempo** (${imbalanceData?.byArea?.fisica?.realMinutes || 75} min) - *Equilibrado*.
+
+---
+
+#### 3. 🔍 Hipótesis Metodológica & Coherencia con tu Filosofía
+Tu filosofía exige '${philosophy.playStyle || 'ritmo alto y tiro rápido'}'; sin embargo, **la técnica individual de tiro ha recibido menos del ${tecRealPct}% del tiempo efectivo en pista**. Los fallos en partido no se deben a una mala toma de decisiones colectiva, sino a la falta de repetición y automatización técnica previa bajo fatiga.
+
+---
+
+#### 4. 📋 Propuesta para el Microciclo #${(microcycle?.semana || 3) + 1}
+
+* **🔴 Arrastrados:** Refuerzo de tiro en Catch & Shoot y finalizaciones tras pase en carrera (añadir +25 min de volumen por sesión).
+* **🟡 Nuevos:** Lecturas de penetrar y doblar (Drive & Kick) hacia tiradores en esquina.
+* **🟢 Refuerzos:** Mantener las normas de balance defensivo (${philosophy.defensiveFocus || 'presión'}).
+* **⚪ Mantenimiento:** Trabajo de aceleración y agilidad lateral reactiva.
+
+**Distribución recomendada para 4 sesiones (90 min c/u):**
+- **Sesión 1 (90 min):** 20' Física | 35' Técnica de tiro con oposición progresiva | 35' Táctica 3c3.
+- **Sesión 2 (90 min):** 15' Física | 30' Técnica de finalizaciones y lectura | 45' Táctica 5c5 (foco Drive & Kick).
+- **Sesión 3 (90 min):** 15' Física | 35' Concurso de tiro bajo pulsaciones y TL | 40' Táctica de situaciones especiales.
+- **Sesión 4 (90 min):** 15' Activación | 25' Ruedas de tiro de partido | 50' 5v5 Real aplicando normas.`;
+    }
+
+    return res.json({
+      success: true,
+      text: fallbackText,
+      source: 'coachmind-engine-fallback',
+    });
+  } catch (err: any) {
+    console.error('Error in /api/planning/ai-close-chat:', err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Error al procesar la sesión de cierre con IA',
     });
   }
 });

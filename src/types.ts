@@ -13,6 +13,7 @@ export interface UserProfile {
   registeredAt: string;
   photoUrl?: string;
   age?: number | string;
+  coachPhilosophy?: string;
   season?: string;
   coachLevel?: 'Nivel 0' | 'Nivel 1' | 'Nivel 2' | 'Nivel Nacional' | 'Nivel Profesional' | string;
   titleFederation?: string;
@@ -331,3 +332,6 @@ export interface AppReview {
   comment: string;
   createdAt: string;
 }
+
+// Re-export annual planning types
+export * from './types/planning';

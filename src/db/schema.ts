@@ -76,11 +76,72 @@ export const matches = pgTable('matches', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Annual Planning - Season Goals
+export const seasonGoals = pgTable('season_goals', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull(),
+  temporada: text('temporada').notNull(),
+  categoria: text('categoria').notNull(),
+  objetivoPrincipal: text('objetivo_principal').notNull(),
+  objetivosDeportivos: jsonb('objetivos_deportivos').$type<string[]>(),
+  objetivosFormativos: jsonb('objetivos_formativos').$type<string[]>(),
+  estiloDeJuego: text('estilo_de_juego'),
+  fechaInicio: text('fecha_inicio'),
+  fechaFin: text('fecha_fin'),
+  philosophySnapshot: jsonb('philosophy_snapshot').$type<any>(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Annual Planning - Mesocycles
+export const mesocycles = pgTable('mesocycles', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull(),
+  seasonGoalId: integer('season_goal_id')
+    .references(() => seasonGoals.id, { onDelete: 'cascade' }),
+  numero: integer('numero').notNull(),
+  nombre: text('nombre').notNull(),
+  fechaInicio: text('fecha_inicio'),
+  fechaFin: text('fecha_fin'),
+  objetivoPrincipal: text('objetivo_principal'),
+  estado: text('estado').default('planificado'), // 'planificado' | 'activo' | 'cerrado'
+  resumenCierre: text('resumen_cierre'),
+  goals: jsonb('goals').$type<any[]>(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Annual Planning - Microcycles
+export const microcycles = pgTable('microcycles', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull(),
+  mesocycleId: integer('mesocycle_id')
+    .references(() => mesocycles.id, { onDelete: 'cascade' }),
+  semana: integer('semana').notNull(),
+  fechaInicio: text('fecha_inicio'),
+  fechaFin: text('fecha_fin'),
+  objetivoSemanal: text('objetivo_semanal'),
+  cargasPlanificadas: jsonb('cargas_planificadas').$type<any>(),
+  goalIds: jsonb('goal_ids').$type<string[]>(),
+  estado: text('estado').default('planificado'), // 'planificado' | 'activo' | 'cerrado'
+  sessions: jsonb('sessions').$type<any[]>(),
+  evaluation: jsonb('evaluation').$type<any>(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   players: many(players),
   drills: many(drills),
   matches: many(matches),
+  seasonGoals: many(seasonGoals),
+  mesocycles: many(mesocycles),
+  microcycles: many(microcycles),
   philosophy: one(philosophies, {
     fields: [users.id],
     references: [philosophies.userId],

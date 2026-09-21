@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Compass,
   Brain,
@@ -13,9 +13,13 @@ import {
   MessageSquare,
   Loader2,
   RotateCcw,
+  CalendarRange,
+  ArrowRight,
+  Layers,
 } from 'lucide-react';
-import { CoachPhilosophy, UserProfile, Player } from '../types';
+import { CoachPhilosophy, UserProfile, Player, ViewMode } from '../types';
 import { consumeTrialAction } from '../utils/trialManager';
+import { planningService } from '../services/planningService';
 
 interface PhilosophyViewProps {
   philosophy: CoachPhilosophy | null;
@@ -23,6 +27,7 @@ interface PhilosophyViewProps {
   userProfile?: UserProfile | null;
   onOpenTrialModal?: (mode?: 'general_action' | 'ficha_entrenador') => void;
   players?: Player[];
+  onNavigate?: (view: ViewMode) => void;
 }
 
 export const PhilosophyView: React.FC<PhilosophyViewProps> = ({
@@ -31,6 +36,7 @@ export const PhilosophyView: React.FC<PhilosophyViewProps> = ({
   userProfile,
   onOpenTrialModal,
   players,
+  onNavigate,
 }) => {
   const [playStyle, setPlayStyle] = useState(philosophy?.playStyle || '');
   const [offensiveFocus, setOffensiveFocus] = useState(philosophy?.offensiveFocus || '');
@@ -40,7 +46,15 @@ export const PhilosophyView: React.FC<PhilosophyViewProps> = ({
   const [coreValues, setCoreValues] = useState(philosophy?.coreValues || '');
   const [additionalNotes, setAdditionalNotes] = useState(philosophy?.additionalNotes || '');
 
-  React.useEffect(() => {
+  const [season, setSeason] = useState(() => {
+    try {
+      return planningService.getSeason();
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
     setPlayStyle(philosophy?.playStyle || '');
     setOffensiveFocus(philosophy?.offensiveFocus || '');
     setDefensiveFocus(philosophy?.defensiveFocus || '');
@@ -49,6 +63,21 @@ export const PhilosophyView: React.FC<PhilosophyViewProps> = ({
     setCoreValues(philosophy?.coreValues || '');
     setAdditionalNotes(philosophy?.additionalNotes || '');
   }, [philosophy]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        setSeason(planningService.getSeason());
+      } catch {
+        setSeason(null);
+      }
+    };
+
+    window.addEventListener('coachmind_philosophy_saved', handleSync);
+    return () => {
+      window.removeEventListener('coachmind_philosophy_saved', handleSync);
+    };
+  }, []);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -88,6 +117,9 @@ export const PhilosophyView: React.FC<PhilosophyViewProps> = ({
 
     onSavePhilosophy(updated);
     setSavedSuccess(true);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('coachmind_philosophy_saved'));
+    }
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
@@ -223,6 +255,54 @@ export const PhilosophyView: React.FC<PhilosophyViewProps> = ({
           <span>
             ¡Filosofía guardada correctamente! La IA Entrenadora aplicará estas pautas en la generación de sesiones y consultas tácticas.
           </span>
+        </div>
+      )}
+
+      {/* Cross Panel: Resumen de Objetivos de Temporada (Visible sin scroll) */}
+      {season && season.temporada ? (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/60 border border-orange-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="p-2.5 bg-orange-500 text-white rounded-xl shrink-0 shadow-xs">
+              <CalendarRange className="w-5 h-5" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-black uppercase tracking-wider text-orange-800 bg-orange-100 px-2 py-0.5 rounded-full">
+                  Despliegue Anual
+                </span>
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 tracking-tight">
+                  Objetivos de la Temporada actual: {season.temporada} ({season.categoria})
+                </h3>
+              </div>
+              <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                <span className="font-semibold text-slate-800">Objetivo rector:</span>{' '}
+                {season.objetivoPrincipal || 'Definido en planificación anual'}.{' '}
+                <span className="text-orange-950 font-medium">
+                  ({(season.objetivosDeportivos?.length || 0) + (season.objetivosFormativos?.length || 0)} objetivos anuales subordinados a esta filosofía).
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('annual-planning')}
+              className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 self-start sm:self-auto shrink-0 shadow-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <span>Ver Objetivos de la Temporada</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-600 flex items-center gap-3">
+          <div className="p-2 bg-slate-200/70 text-slate-600 rounded-xl shrink-0">
+            <CalendarRange className="w-5 h-5" />
+          </div>
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
+            Aún no has abierto ninguna temporada. Cuando la abras, tus objetivos anuales se construirán sobre esta filosofía.
+          </p>
         </div>
       )}
 
