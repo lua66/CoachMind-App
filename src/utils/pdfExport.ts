@@ -506,7 +506,13 @@ export const exportTrainingSessionToPdf = async (training: SavedTraining): Promi
           for (let vIdx = 1; vIdx < drill.diagrams.length; vIdx++) {
             const variant = drill.diagrams[vIdx];
             const variantPng = await renderDrillDiagramToPng(variant);
-            const variantCardHeight = 48;
+            const variantDesc = (variant.description || '').trim();
+            const descLines: string[] = variantDesc
+              ? doc.splitTextToSize(variantDesc, contentWidth - 62 - 14)
+              : [];
+
+            const extraLines = Math.max(0, descLines.length - 2);
+            const variantCardHeight = Math.max(48, 44 + extraLines * 3.6);
             checkPageBreak(variantCardHeight + 4);
 
             const vCardStartY = y;
@@ -540,17 +546,34 @@ export const exportTrainingSessionToPdf = async (training: SavedTraining): Promi
             }
 
             // Variant description / info on right
+            const infoStartX = margin + vBoardWidth + 8;
+            let infoCurY = vCardStartY + 13.5;
+
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.5);
             doc.setTextColor(15, 23, 42);
-            doc.text('Detalles de la Variante:', margin + vBoardWidth + 8, vCardStartY + 14);
+            doc.text('Descripción de la Variante:', infoStartX, infoCurY);
+            infoCurY += 4.5;
 
+            if (descLines.length > 0) {
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(7);
+              doc.setTextColor(51, 65, 85);
+              doc.text(descLines.slice(0, 7), infoStartX, infoCurY);
+              infoCurY += Math.min(descLines.length, 7) * 3.5 + 2;
+            } else {
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(7);
+              doc.setTextColor(100, 116, 139);
+              doc.text('Continuación y progresión táctica sobre el ejercicio base.', infoStartX, infoCurY);
+              infoCurY += 5;
+            }
+
+            // Meta tags
             doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
-            doc.setTextColor(71, 85, 105);
-            doc.text('• Continuación y progresión táctica del ejercicio.', margin + vBoardWidth + 8, vCardStartY + 19);
-            doc.text(`• Tipo de Pista: ${variant.courtType === 'full' ? 'Pista Completa' : 'Media Pista'}`, margin + vBoardWidth + 8, vCardStartY + 23.5);
-            doc.text(`• Elementos tácticos en pista: ${(variant.diagramElements || []).length} fichas/trazos`, margin + vBoardWidth + 8, vCardStartY + 28);
+            doc.setFontSize(6.5);
+            doc.setTextColor(100, 116, 139);
+            doc.text(`• Tipo de Pista: ${variant.courtType === 'full' ? 'Pista Completa' : 'Media Pista'}  |  ${(variant.diagramElements || []).length} elementos tácticos`, infoStartX, infoCurY);
 
             y += variantCardHeight + 3;
           }
@@ -863,9 +886,30 @@ export const exportTrainingToDoc = async (training: SavedTraining): Promise<bool
           }
 
           <div style="margin-top: 12px; text-align: center; background-color: #0f172a; padding: 12px; border-radius: 8px;">
-            <div style="font-size: 11px; font-weight: bold; color: #fb923c; margin-bottom: 6px; text-align: left; text-transform: uppercase;">📋 Pizarra Táctica:</div>
+            <div style="font-size: 11px; font-weight: bold; color: #fb923c; margin-bottom: 6px; text-align: left; text-transform: uppercase;">📋 Pizarra Principal:</div>
             <img src="${diagramPng}" width="460" height="288" style="display: block; margin: 0 auto; border-radius: 6px; border: 1px solid #475569;" alt="Pizarra táctica de ${drill.title}" />
           </div>
+
+          ${
+            drill.diagrams && drill.diagrams.length > 1
+              ? (
+                  await Promise.all(
+                    drill.diagrams.slice(1).map(async (v, vIdx) => {
+                      const vPng = await renderDrillDiagramToPng(v);
+                      return `
+                        <div style="margin-top: 14px; padding: 12px; background-color: #f8fafc; border: 1px solid #ea580c; border-radius: 8px;">
+                          <div style="font-size: 13px; font-weight: bold; color: #ea580c; margin-bottom: 6px;">🔀 Variante ${vIdx + 1}: ${v.title || 'Progresión táctica'}</div>
+                          ${v.description ? `<p style="margin: 4px 0 10px 0; font-size: 12px; color: #334155;"><strong>Descripción de la variante:</strong> ${v.description.replace(/\n/g, '<br/>')}</p>` : ''}
+                          <div style="text-align: center; background-color: #0f172a; padding: 10px; border-radius: 6px;">
+                            <img src="${vPng}" width="420" height="262" style="display: block; margin: 0 auto; border-radius: 4px;" alt="${v.title}" />
+                          </div>
+                        </div>
+                      `;
+                    })
+                  )
+                ).join('')
+              : ''
+          }
         </div>
       `;
     }

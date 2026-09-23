@@ -163,7 +163,10 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
 
         let loadedDiagrams: DrillVariantDiagram[] = [];
         if (firstDrill.diagrams && firstDrill.diagrams.length > 0) {
-          loadedDiagrams = firstDrill.diagrams;
+          loadedDiagrams = firstDrill.diagrams.map((diag, i) => ({
+            ...diag,
+            description: diag.description !== undefined ? diag.description : (i === 0 ? (firstDrill.description || '') : ''),
+          }));
         } else {
           loadedDiagrams = [
             {
@@ -172,23 +175,24 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
               courtType: firstDrill.courtType || 'half',
               diagramDataUrl: firstDrill.diagramDataUrl,
               diagramElements: firstDrill.diagramElements || [],
+              description: firstDrill.description || '',
             },
           ];
         }
 
         setCurrentDrillDiagrams(loadedDiagrams);
         setActiveDiagramIndex(0);
+        setCurrentDrillDescription(loadedDiagrams[0]?.description || firstDrill.description || '');
         setCurrentCourtType(loadedDiagrams[0]?.courtType || 'half');
         setCurrentDiagramElements(loadedDiagrams[0]?.diagramElements || []);
         setBoardResetKey((prev) => prev + 1);
       }
     } else if (drills.length === 0) {
+      const defaultDesc = 'Activación motriz, desplazamientos defensivos y bote coordinado de calentamiento.';
       setCurrentDrillTitle('Ejercicio 1: Calentamiento y fundamentos');
       setCurrentDrillDuration(15);
       setCurrentDrillPlayers('Toda la plantilla');
-      setCurrentDrillDescription(
-        'Activación motriz, desplazamientos defensivos y bote coordinado de calentamiento.'
-      );
+      setCurrentDrillDescription(defaultDesc);
       setCurrentDrillTips('Postura defensiva baja y comunicación en pista.');
       setCurrentCourtType('half');
       setCurrentDiagramElements([]);
@@ -198,6 +202,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
           title: 'Pizarra Principal',
           courtType: 'half',
           diagramElements: [],
+          description: defaultDesc,
         },
       ]);
       setActiveDiagramIndex(0);
@@ -205,7 +210,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     }
   }, [initialTraining]);
 
-  // Flush active whiteboard state into currentDrillDiagrams
+  // Flush active whiteboard state into currentDrillDiagrams with its current description
   const syncActiveBoardToDiagrams = () => {
     const currentEls = boardRef.current ? boardRef.current.getElements() : currentDiagramElements;
     const currentCourt = boardRef.current ? boardRef.current.getCourtType() : currentCourtType;
@@ -218,6 +223,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
         diagramElements: currentEls,
         courtType: currentCourt,
         diagramDataUrl: currentSvg,
+        description: currentDrillDescription,
       };
     } else if (updated.length === 0) {
       updated.push({
@@ -226,12 +232,28 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
         courtType: currentCourt,
         diagramElements: currentEls,
         diagramDataUrl: currentSvg,
+        description: currentDrillDescription,
       });
     }
     return { updated, currentEls, currentCourt, currentSvg };
   };
 
-  // Switch between variant tabs
+  // Update description and sync directly to current variant diagram
+  const handleDescriptionChange = (newDesc: string) => {
+    setCurrentDrillDescription(newDesc);
+    setCurrentDrillDiagrams((prev) => {
+      const copy = [...prev];
+      if (copy[activeDiagramIndex]) {
+        copy[activeDiagramIndex] = {
+          ...copy[activeDiagramIndex],
+          description: newDesc,
+        };
+      }
+      return copy;
+    });
+  };
+
+  // Switch between variant tabs without losing any variant description
   const handleSelectDiagram = (targetIdx: number) => {
     if (targetIdx === activeDiagramIndex) return;
     const { updated } = syncActiveBoardToDiagrams();
@@ -241,6 +263,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
       setActiveDiagramIndex(targetIdx);
       setCurrentCourtType(targetDiag.courtType || 'half');
       setCurrentDiagramElements(targetDiag.diagramElements || []);
+      setCurrentDrillDescription(targetDiag.description || '');
       setBoardResetKey((prev) => prev + 1);
     }
   };
@@ -255,6 +278,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
       courtType: currentCourt,
       diagramElements: duplicateCurrent ? JSON.parse(JSON.stringify(currentEls)) : [],
       diagramDataUrl: duplicateCurrent ? currentSvg : undefined,
+      description: duplicateCurrent ? currentDrillDescription : '',
     };
 
     const newDiagramsList = [...updated, newDiag];
@@ -262,6 +286,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     setActiveDiagramIndex(newDiagramsList.length - 1);
     setCurrentCourtType(newDiag.courtType);
     setCurrentDiagramElements(newDiag.diagramElements);
+    setCurrentDrillDescription(newDiag.description || '');
     setBoardResetKey((prev) => prev + 1);
   };
 
@@ -270,7 +295,14 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     if (currentDrillDiagrams.length <= 1) return;
     const { updated } = syncActiveBoardToDiagrams();
     const filtered = updated.filter((_, i) => i !== dIdx);
-    const nextActive = activeDiagramIndex >= filtered.length ? filtered.length - 1 : (activeDiagramIndex === dIdx ? Math.max(0, dIdx - 1) : (activeDiagramIndex > dIdx ? activeDiagramIndex - 1 : activeDiagramIndex));
+    const nextActive =
+      activeDiagramIndex >= filtered.length
+        ? filtered.length - 1
+        : activeDiagramIndex === dIdx
+        ? Math.max(0, dIdx - 1)
+        : activeDiagramIndex > dIdx
+        ? activeDiagramIndex - 1
+        : activeDiagramIndex;
 
     setCurrentDrillDiagrams(filtered);
     setActiveDiagramIndex(nextActive);
@@ -278,6 +310,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     if (targetDiag) {
       setCurrentCourtType(targetDiag.courtType || 'half');
       setCurrentDiagramElements(targetDiag.diagramElements || []);
+      setCurrentDrillDescription(targetDiag.description || '');
       setBoardResetKey((prev) => prev + 1);
     }
   };
@@ -306,17 +339,26 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
+    const mainDescription =
+      updated[0]?.description?.trim() ||
+      (activeDiagramIndex === 0 ? currentDrillDescription.trim() : '') ||
+      currentDrillDescription.trim() ||
+      'Desarrollo táctico del ejercicio.';
+
     const newDrillItem: DrillItem = {
       id: activeDrillIndex !== null && drills[activeDrillIndex] ? drills[activeDrillIndex].id : `drill-${Date.now()}`,
       title: drillTitle,
       durationMinutes: Number(currentDrillDuration) || 15,
       playersCount: currentDrillPlayers.trim() || 'Toda la plantilla',
-      description: currentDrillDescription.trim() || 'Desarrollo táctico del ejercicio.',
+      description: mainDescription,
       coachingTips: tipsArray.length > 0 ? tipsArray : ['Exigir máxima intensidad y concentración'],
       courtType: updated[0]?.courtType || currentCourt,
       diagramDataUrl: updated[0]?.diagramDataUrl || currentSvg,
       diagramElements: updated[0]?.diagramElements || currentEls,
-      diagrams: updated,
+      diagrams: updated.map((diag, idx) => ({
+        ...diag,
+        description: idx === 0 ? (diag.description || mainDescription) : (diag.description || ''),
+      })),
     };
 
     if (activeDrillIndex !== null && activeDrillIndex < drills.length) {
@@ -345,6 +387,7 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
       title: 'Pizarra Principal',
       courtType: 'half',
       diagramElements: [],
+      description: '',
     };
     setCurrentDrillDiagrams([freshDiag]);
     setActiveDiagramIndex(0);
@@ -363,12 +406,14 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     setCurrentDrillTitle(d.title);
     setCurrentDrillDuration(d.durationMinutes || 15);
     setCurrentDrillPlayers(d.playersCount || 'Toda la plantilla');
-    setCurrentDrillDescription(d.description || '');
     setCurrentDrillTips((d.coachingTips || []).join('\n'));
 
     let loadedDiagrams: DrillVariantDiagram[] = [];
     if (d.diagrams && d.diagrams.length > 0) {
-      loadedDiagrams = d.diagrams;
+      loadedDiagrams = d.diagrams.map((diag, i) => ({
+        ...diag,
+        description: diag.description !== undefined ? diag.description : (i === 0 ? (d.description || '') : ''),
+      }));
     } else {
       loadedDiagrams = [
         {
@@ -377,12 +422,14 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
           courtType: d.courtType || 'half',
           diagramDataUrl: d.diagramDataUrl,
           diagramElements: d.diagramElements || [],
+          description: d.description || '',
         },
       ];
     }
 
     setCurrentDrillDiagrams(loadedDiagrams);
     setActiveDiagramIndex(0);
+    setCurrentDrillDescription(loadedDiagrams[0]?.description || d.description || '');
     setCurrentCourtType(loadedDiagrams[0]?.courtType || 'half');
     setCurrentDiagramElements(loadedDiagrams[0]?.diagramElements || []);
     setBoardResetKey((prev) => prev + 1);
@@ -415,17 +462,26 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
     let finalDrills = [...drills];
     if (finalDrills.length === 0 && currentDrillTitle.trim()) {
       const { updated, currentCourt, currentSvg, currentEls } = syncActiveBoardToDiagrams();
+      const mainDescription =
+        updated[0]?.description?.trim() ||
+        (activeDiagramIndex === 0 ? currentDrillDescription.trim() : '') ||
+        currentDrillDescription.trim() ||
+        'Desarrollo táctico del ejercicio.';
+
       finalDrills.push({
         id: `drill-${Date.now()}`,
         title: currentDrillTitle.trim(),
         durationMinutes: currentDrillDuration,
         playersCount: currentDrillPlayers,
-        description: currentDrillDescription,
+        description: mainDescription,
         coachingTips: currentDrillTips.split('\n').filter(Boolean),
         diagramDataUrl: updated[0]?.diagramDataUrl || currentSvg,
         diagramElements: updated[0]?.diagramElements || currentEls,
         courtType: updated[0]?.courtType || currentCourt,
-        diagrams: updated,
+        diagrams: updated.map((diag, idx) => ({
+          ...diag,
+          description: idx === 0 ? (diag.description || mainDescription) : (diag.description || ''),
+        })),
       });
     }
 
@@ -1169,14 +1225,25 @@ export const CreateTrainingView: React.FC<CreateTrainingViewProps> = ({
             {/* Instructions & Coaching Tips */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Descripción y Reglas del ejercicio
+                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>
+                    Descripción de {activeDiagramIndex === 0 ? 'Pizarra Principal' : (currentDrillDiagrams[activeDiagramIndex]?.title || `Variante ${activeDiagramIndex}`)}
+                  </span>
+                  {currentDrillDiagrams.length > 1 && (
+                    <span className="text-[10px] text-orange-700 font-extrabold bg-orange-100/80 px-2 py-0.5 rounded-md border border-orange-300">
+                      Pizarra {activeDiagramIndex + 1} de {currentDrillDiagrams.length}
+                    </span>
+                  )}
                 </label>
                 <textarea
                   rows={3}
                   value={currentDrillDescription}
-                  onChange={(e) => setCurrentDrillDescription(e.target.value)}
-                  placeholder="Explica el funcionamiento: rotaciones, cómo se inicia la jugada, normas de puntuación..."
+                  onChange={(e) => handleDescriptionChange(e.target.value)}
+                  placeholder={
+                    activeDiagramIndex === 0
+                      ? 'Explica el funcionamiento base del ejercicio: rotaciones, cómo se inicia, normas de puntuación...'
+                      : `Explica las normas específicas y ajustes tácticos de esta variante (${currentDrillDiagrams[activeDiagramIndex]?.title || `Variante ${activeDiagramIndex}`})...`
+                  }
                   className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 resize-none font-medium"
                 />
               </div>

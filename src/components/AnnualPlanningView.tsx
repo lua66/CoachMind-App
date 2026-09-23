@@ -35,6 +35,7 @@ import { SeasonGoalManager } from './planning/SeasonGoalManager';
 import { MesocycleManager } from './planning/MesocycleManager';
 import { MicrocycleManager } from './planning/MicrocycleManager';
 import { ImbalanceDashboard } from './planning/ImbalanceDashboard';
+import { WeeklyWorkloadChart } from './planning/WeeklyWorkloadChart';
 
 interface AnnualPlanningViewProps {
   userProfile?: UserProfile | null;
@@ -49,7 +50,7 @@ export const AnnualPlanningView: React.FC<AnnualPlanningViewProps> = ({
   coachPhilosophy,
   onNavigateToPhilosophy,
 }) => {
-  const [activeTab, setActiveTab] = useState<PlanningTab>('microciclos');
+  const [activeTab, setActiveTab] = useState<PlanningTab>('temporada');
   const [season, setSeason] = useState<SeasonGoal>(() => planningService.getSeason());
   const [mesocycles, setMesocycles] = useState<Mesocycle[]>(() => planningService.getMesocycles());
   const [microcycles, setMicrocycles] = useState<Microcycle[]>(() => planningService.getMicrocycles());
@@ -128,8 +129,21 @@ export const AnnualPlanningView: React.FC<AnnualPlanningViewProps> = ({
     }
   };
 
-  const activeMesocycle = mesocycles.find((m) => m.id === selectedMesocycleId) || mesocycles[0];
-  const activeMicrocycles = microcycles.filter((m) => m.mesocycleId === activeMesocycle?.id);
+  const fallbackMesocycle: Mesocycle = {
+    id: 'meso-general',
+    seasonGoalId: season?.id || 'season-current',
+    numero: 1,
+    nombre: 'Planificación de la Temporada',
+    fechaInicio: '',
+    fechaFin: '',
+    objetivoPrincipal: 'Desarrollo y competición semanal',
+    estado: 'activo',
+    goals: [],
+  };
+  const activeMesocycle = mesocycles.find((m) => m.id === selectedMesocycleId) || mesocycles[0] || fallbackMesocycle;
+  const activeMicrocycles = mesocycles.length > 0
+    ? microcycles.filter((m) => m.mesocycleId === activeMesocycle.id || !m.mesocycleId)
+    : microcycles;
 
   // Handlers
   const handleSaveSeason = (updated: SeasonGoal) => {
@@ -221,11 +235,13 @@ export const AnnualPlanningView: React.FC<AnnualPlanningViewProps> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-2xl font-black tracking-tight text-slate-900">
-                  Objetivos de la Temporada {season.temporada}
+                  Objetivos de la Temporada {season.temporada ? season.temporada : ''}
                 </h1>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 font-bold uppercase">
-                  {season.categoria}
-                </span>
+                {season.categoria && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 font-bold uppercase">
+                    {season.categoria}
+                  </span>
+                )}
                 {isPhilosophyComplete && (
                   <button
                     type="button"
@@ -294,7 +310,7 @@ export const AnnualPlanningView: React.FC<AnnualPlanningViewProps> = ({
             }`}
           >
             <Calendar className="w-4 h-4" />
-            <span>3. Microciclos y Sesiones ({microcycles.length})</span>
+            <span>3. Microciclos</span>
           </button>
 
           <button
@@ -312,17 +328,29 @@ export const AnnualPlanningView: React.FC<AnnualPlanningViewProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="pt-2">
+        <div className="pt-2 space-y-6">
           {activeTab === 'temporada' && (
-            <SeasonGoalManager
-              season={season}
-              onSave={handleSaveSeason}
-              isPhilosophyComplete={isPhilosophyComplete}
-              missingCriticalFields={missingCritical}
-              currentPhilosophy={activePhilosophy}
-              onNavigateToPhilosophy={onNavigateToPhilosophy}
-              onUpdateSnapshot={handleUpdateSnapshot}
-            />
+            <>
+              <SeasonGoalManager
+                season={season}
+                onSave={handleSaveSeason}
+                isPhilosophyComplete={isPhilosophyComplete}
+                missingCriticalFields={missingCritical}
+                currentPhilosophy={activePhilosophy}
+                onNavigateToPhilosophy={onNavigateToPhilosophy}
+                onUpdateSnapshot={handleUpdateSnapshot}
+              />
+
+              {/* Weekly Workload Bar Chart Visualization */}
+              <WeeklyWorkloadChart
+                microcycles={microcycles}
+                mesocycles={mesocycles}
+                onSelectMicrocycle={(microId, mesoId) => {
+                  setSelectedMesocycleId(mesoId);
+                  setActiveTab('microciclos');
+                }}
+              />
+            </>
           )}
 
           {activeTab === 'mesociclos' && (

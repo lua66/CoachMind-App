@@ -128,6 +128,19 @@ const DrillDiagramViewer: React.FC<DrillDiagramViewerProps> = ({ drill }) => {
           <span className="text-[11px]">Sin diagrama dibujado</span>
         </div>
       )}
+
+      {/* Specific Variant Description Callout */}
+      {currentVariant?.description && (
+        <div className="p-2.5 rounded-xl bg-orange-50/80 border border-orange-200/90 text-xs text-slate-800">
+          <div className="flex items-center gap-1.5 font-extrabold text-orange-900 text-[11px] uppercase tracking-wide mb-1">
+            <span>📝</span>
+            <span>Descripción de {currentVariant.title || `Variante ${selectedVariantIdx}`}:</span>
+          </div>
+          <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
+            {currentVariant.description}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

@@ -15,6 +15,10 @@ import {
   ChevronDown,
   ChevronUp,
   Compass,
+  Check,
+  X,
+  Eraser,
+  FolderPlus,
 } from 'lucide-react';
 import { CoachPhilosophy } from '../../types';
 import {
@@ -143,16 +147,12 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
   };
 
   const handleCreateNewMeso = () => {
-    if (!isPhilosophyComplete) {
-      onNavigateToPhilosophy?.();
-      return;
-    }
     const nextNum = mesocycles.length + 1;
     const newMeso: Mesocycle = {
       id: `meso-${Date.now()}`,
-      seasonGoalId: 'season-2025-2026-senior',
+      seasonGoalId: 'season-current',
       numero: nextNum,
-      nombre: `Mesociclo ${nextNum}: Fase ${nextNum}`,
+      nombre: `Mesociclo ${nextNum}`,
       fechaInicio: '',
       fechaFin: '',
       objetivoPrincipal: '',
@@ -164,14 +164,22 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
   };
 
   const handleSaveEdit = () => {
-    if (!isPhilosophyComplete) {
-      onNavigateToPhilosophy?.();
-      return;
-    }
     if (editingMeso) {
+      if (!editingMeso.nombre.trim()) {
+        alert('Por favor, indica un nombre para el mesociclo.');
+        return;
+      }
       onSaveMesocycle(editingMeso);
+      setExpandedId(editingMeso.id);
       setEditingMeso(null);
       setIsCreating(false);
+    }
+  };
+
+  const handleClearAllMesos = () => {
+    if (window.confirm('¿Deseas eliminar todos los mesociclos y empezar desde cero?')) {
+      mesocycles.forEach((m) => onDeleteMesocycle(m.id));
+      setExpandedId(null);
     }
   };
 
@@ -189,27 +197,50 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleCreateNewMeso}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer ${
-            isPhilosophyComplete
-              ? 'bg-orange-600 hover:bg-orange-700 text-white'
-              : 'bg-amber-600 hover:bg-amber-700 text-white'
-          }`}
-        >
-          {isPhilosophyComplete ? <Plus className="w-4 h-4" /> : <Compass className="w-4 h-4" />}
-          <span>{isPhilosophyComplete ? 'Nuevo Mesociclo' : 'Completar Filosofía'}</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {mesocycles.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAllMesos}
+              className="px-3 py-2 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+              title="Borrar todos los mesociclos"
+            >
+              <Eraser className="w-3.5 h-3.5" />
+              <span>Vaciar Mesociclos</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCreateNewMeso}
+            className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Crear Mesociclo</span>
+          </button>
+        </div>
       </div>
 
       {/* Mesocycle Edit Modal */}
       {editingMeso && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-xl border border-slate-200 space-y-4">
-            <h4 className="text-lg font-bold text-slate-900">
-              {isCreating ? 'Crear Nuevo Mesociclo' : 'Editar Mesociclo'}
-            </h4>
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h4 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-orange-600" />
+                <span>{isCreating ? 'Crear Nuevo Mesociclo' : 'Editar Mesociclo'}</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMeso(null);
+                  setIsCreating(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             <div className="space-y-3">
               <div>
@@ -220,7 +251,8 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
                   type="text"
                   value={editingMeso.nombre}
                   onChange={(e) => setEditingMeso({ ...editingMeso, nombre: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-none"
+                  placeholder="p. ej. Mesociclo 1: Pretemporada y Fundamentos"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-hidden"
                 />
               </div>
 
@@ -232,8 +264,8 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
                   rows={2}
                   value={editingMeso.objetivoPrincipal}
                   onChange={(e) => setEditingMeso({ ...editingMeso, objetivoPrincipal: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-none"
-                  placeholder="p. ej. Puesta a punto y automatización de normas colectivas."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-hidden"
+                  placeholder="p. ej. Puesta a punto física y establecimiento del espaciado ofensivo básico."
                 />
               </div>
 
@@ -246,7 +278,7 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
                     type="date"
                     value={editingMeso.fechaInicio}
                     onChange={(e) => setEditingMeso({ ...editingMeso, fechaInicio: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-hidden"
                   />
                 </div>
                 <div>
@@ -257,7 +289,7 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
                     type="date"
                     value={editingMeso.fechaFin}
                     onChange={(e) => setEditingMeso({ ...editingMeso, fechaFin: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-hidden"
                   />
                 </div>
               </div>
@@ -269,7 +301,7 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
                 <select
                   value={editingMeso.estado}
                   onChange={(e) => setEditingMeso({ ...editingMeso, estado: e.target.value as CycleState })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-orange-500 focus:outline-hidden cursor-pointer"
                 >
                   <option value="planificado">Planificado</option>
                   <option value="activo">Activo (En curso)</option>
@@ -285,268 +317,311 @@ export const MesocycleManager: React.FC<MesocycleManagerProps> = ({
                   setEditingMeso(null);
                   setIsCreating(false);
                 }}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition"
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition"
+                className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
               >
-                Guardar
+                <Check className="w-4 h-4" />
+                <span>Guardar Mesociclo</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Mesocycles List */}
-      <div className="space-y-4">
-        {mesocycles.map((meso) => {
-          const isExpanded = expandedId === meso.id;
-          const goalsCount = meso.goals.length;
-          const fulfilledCount = meso.goals.filter((g) => g.estado === 'cumplido').length;
-          const unfulfilledCount = meso.goals.filter((g) => g.estado === 'no_cumplido').length;
-
-          return (
-            <div
-              key={meso.id}
-              className={`bg-white border transition-all rounded-2xl shadow-xs overflow-hidden ${
-                isExpanded ? 'border-orange-300 ring-2 ring-orange-500/10' : 'border-slate-200 hover:border-slate-300'
-              }`}
+      {/* Mesocycles List or Empty State */}
+      {mesocycles.length === 0 ? (
+        <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center space-y-4 shadow-2xs">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 flex items-center justify-center">
+            <Layers className="w-7 h-7" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="text-lg font-bold text-slate-900">
+              No hay Mesociclos Creados
+            </h3>
+            <p className="text-sm text-slate-500">
+              Estructura tu temporada en bloques de trabajo (pretemporada, competición, puesta a punto) y define objetivos técnicos, tácticos, físicos y psicológicos.
+            </p>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={handleCreateNewMeso}
+              className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-bold transition inline-flex items-center gap-2 shadow-sm cursor-pointer"
             >
-              {/* Mesocycle Header */}
+              <FolderPlus className="w-4 h-4" />
+              <span>Crear Mesociclo</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {mesocycles.map((meso) => {
+            const isExpanded = expandedId === meso.id;
+            const goalsCount = meso.goals.length;
+            const fulfilledCount = meso.goals.filter((g) => g.estado === 'cumplido').length;
+            const unfulfilledCount = meso.goals.filter((g) => g.estado === 'no_cumplido').length;
+
+            return (
               <div
-                className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none bg-slate-50/50 hover:bg-slate-50"
-                onClick={() => toggleExpand(meso.id)}
+                key={meso.id}
+                className={`bg-white border transition-all rounded-2xl shadow-xs overflow-hidden ${
+                  isExpanded ? 'border-orange-300 ring-2 ring-orange-500/10' : 'border-slate-200 hover:border-slate-300'
+                }`}
               >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="font-bold text-slate-900 text-lg">{meso.nombre}</span>
-                    <span
-                      className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${
-                        meso.estado === 'activo'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : meso.estado === 'cerrado'
-                          ? 'bg-slate-100 text-slate-600 border-slate-200'
-                          : 'bg-blue-50 text-blue-700 border-blue-200'
-                      }`}
-                    >
-                      {meso.estado === 'activo' ? '● En Curso' : meso.estado === 'cerrado' ? '✓ Cerrado' : 'Planificado'}
-                    </span>
-                    {meso.fechaInicio && (
-                      <span className="text-xs text-slate-500 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {meso.fechaInicio} — {meso.fechaFin || 'En curso'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-slate-600">{meso.objetivoPrincipal}</p>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  {/* Goals progress pill */}
-                  <div className="text-xs px-3 py-1.5 bg-slate-100 rounded-lg text-slate-700 flex items-center gap-2">
-                    <span>{goalsCount} objetivos</span>
-                    {fulfilledCount > 0 && <span className="text-emerald-600 font-bold">✓ {fulfilledCount}</span>}
-                    {unfulfilledCount > 0 && <span className="text-red-600 font-bold">✕ {unfulfilledCount}</span>}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => onSelectMesocycleForMicrocycles(meso.id)}
-                    className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
-                  >
-                    <span>Ver Microciclos</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setEditingMeso(meso)}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-lg transition"
-                    title="Editar Mesociclo"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(meso.id)}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition"
-                  >
-                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Mesocycle Expanded Body */}
-              {isExpanded && (
-                <div className="p-6 border-t border-slate-100 space-y-6">
-                  {/* AI Memory / Summary if closed */}
-                  {meso.resumenCierre && (
-                    <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-start gap-3">
-                      <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="text-sm">
-                        <span className="font-bold text-amber-900 block mb-0.5">
-                          Memoria Histórica del Mesociclo (Cierre)
-                        </span>
-                        <p className="text-amber-800 leading-relaxed">{meso.resumenCierre}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Specific Goals Section */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                        Objetivos Específicos por Área ({meso.goals.length})
-                      </h4>
-
-                      <button
-                        type="button"
-                        onClick={() => setAddingGoalMesoId(addingGoalMesoId === meso.id ? null : meso.id)}
-                        className="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1"
+                {/* Mesocycle Header */}
+                <div
+                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none bg-slate-50/50 hover:bg-slate-50"
+                  onClick={() => toggleExpand(meso.id)}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="font-bold text-slate-900 text-lg">{meso.nombre}</span>
+                      <span
+                        className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${
+                          meso.estado === 'activo'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : meso.estado === 'cerrado'
+                            ? 'bg-slate-100 text-slate-600 border-slate-200'
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Añadir Objetivo</span>
-                      </button>
+                        {meso.estado === 'activo' ? '● En Curso' : meso.estado === 'cerrado' ? '✓ Cerrado' : 'Planificado'}
+                      </span>
+                      {meso.fechaInicio && (
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {meso.fechaInicio} — {meso.fechaFin || 'En curso'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-600">{meso.objetivoPrincipal || <span className="text-slate-400 italic">Sin objetivo principal definido</span>}</p>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {/* Goals progress pill */}
+                    <div className="text-xs px-3 py-1.5 bg-slate-100 rounded-lg text-slate-700 flex items-center gap-2">
+                      <span>{goalsCount} objetivos</span>
+                      {fulfilledCount > 0 && <span className="text-emerald-600 font-bold">✓ {fulfilledCount}</span>}
+                      {unfulfilledCount > 0 && <span className="text-red-600 font-bold">✕ {unfulfilledCount}</span>}
                     </div>
 
-                    {/* Add Goal Inline Form */}
-                    {addingGoalMesoId === meso.id && (
-                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl mb-4 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Área</label>
-                            <select
-                              value={newGoalArea}
-                              onChange={(e) => setNewGoalArea(e.target.value as PlanningArea)}
-                              className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none"
-                            >
-                              <option value="tecnica">Técnica Individual</option>
-                              <option value="tactica">Táctica de Equipo</option>
-                              <option value="fisica">Preparación Física</option>
-                              <option value="mental">Mental / Psicológica</option>
-                            </select>
+                    <button
+                      type="button"
+                      onClick={() => onSelectMesocycleForMicrocycles(meso.id)}
+                      className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <span>Ver Microciclos</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMeso(meso);
+                        setIsCreating(false);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
+                      title="Editar Mesociclo"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`¿Deseas eliminar el "${meso.nombre}"?`)) {
+                          onDeleteMesocycle(meso.id);
+                        }
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                      title="Eliminar Mesociclo"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(meso.id)}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition cursor-pointer"
+                    >
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mesocycle Expanded Body */}
+                {isExpanded && (
+                  <div className="p-6 border-t border-slate-100 space-y-6">
+                    {/* AI Memory / Summary if closed */}
+                    {meso.resumenCierre && (
+                      <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-start gap-3">
+                        <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                          <span className="font-bold text-amber-900 block mb-0.5">
+                            Memoria Histórica del Mesociclo (Cierre)
+                          </span>
+                          <p className="text-amber-800 leading-relaxed">{meso.resumenCierre}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Specific Goals Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                          Objetivos Específicos por Área ({meso.goals.length})
+                        </h4>
+
+                        <button
+                          type="button"
+                          onClick={() => setAddingGoalMesoId(addingGoalMesoId === meso.id ? null : meso.id)}
+                          className="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Añadir Objetivo</span>
+                        </button>
+                      </div>
+
+                      {/* Add Goal Inline Form */}
+                      {addingGoalMesoId === meso.id && (
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl mb-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">Área</label>
+                              <select
+                                value={newGoalArea}
+                                onChange={(e) => setNewGoalArea(e.target.value as PlanningArea)}
+                                className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-hidden cursor-pointer"
+                              >
+                                <option value="tecnica">Técnica Individual</option>
+                                <option value="tactica">Táctica de Equipo</option>
+                                <option value="fisica">Preparación Física</option>
+                                <option value="mental">Mental / Psicológica</option>
+                              </select>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                Descripción del Objetivo
+                              </label>
+                              <input
+                                type="text"
+                                value={newGoalDesc}
+                                onChange={(e) => setNewGoalDesc(e.target.value)}
+                                placeholder="p. ej. Mecánica y velocidad de armado de tiro tras recepción..."
+                                className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-hidden"
+                              />
+                            </div>
                           </div>
-                          <div className="sm:col-span-2">
+
+                          <div>
                             <label className="block text-xs font-semibold text-slate-600 mb-1">
-                              Descripción del Objetivo
+                              Indicador de Éxito / Métrica
                             </label>
                             <input
                               type="text"
-                              value={newGoalDesc}
-                              onChange={(e) => setNewGoalDesc(e.target.value)}
-                              placeholder="p. ej. Mecánica y velocidad de armado de tiro tras recepción..."
-                              className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none"
+                              value={newGoalIndicator}
+                              onChange={(e) => setNewGoalIndicator(e.target.value)}
+                              placeholder="p. ej. >45% de acierto en series de tiro exterior con oposición..."
+                              className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-hidden"
                             />
                           </div>
-                        </div>
 
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-600 mb-1">
-                            Indicador de Éxito / Métrica
-                          </label>
-                          <input
-                            type="text"
-                            value={newGoalIndicator}
-                            onChange={(e) => setNewGoalIndicator(e.target.value)}
-                            placeholder="p. ej. >45% de acierto en series de tiro exterior con oposición..."
-                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none"
-                          />
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => setAddingGoalMesoId(null)}
-                            className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAddGoal(meso)}
-                            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold"
-                          >
-                            Guardar Objetivo
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Goals List */}
-                    {meso.goals.length === 0 ? (
-                      <p className="text-sm text-slate-400 italic py-2">
-                        No se han definido objetivos específicos para este mesociclo. Haz clic en "Añadir Objetivo".
-                      </p>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {meso.goals.map((goal) => {
-                          const areaConfig = AREA_CONFIG[goal.area] || AREA_CONFIG.tecnica;
-                          const statusInfo = STATUS_ICONS[goal.estado] || STATUS_ICONS.pendiente;
-                          const StatusIcon = statusInfo.icon;
-
-                          return (
-                            <div
-                              key={goal.id}
-                              className="p-3.5 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-300 transition"
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setAddingGoalMesoId(null)}
+                              className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
                             >
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span
-                                    className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${areaConfig.badgeClass}`}
-                                  >
-                                    {areaConfig.label}
-                                  </span>
-                                  <span className="font-semibold text-slate-800 text-sm">{goal.descripcion}</span>
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddGoal(meso)}
+                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
+                            >
+                              Guardar Objetivo
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Goals List */}
+                      {meso.goals.length === 0 ? (
+                        <p className="text-sm text-slate-400 italic py-2">
+                          No se han definido objetivos específicos para este mesociclo. Haz clic en "Añadir Objetivo".
+                        </p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {meso.goals.map((goal) => {
+                            const areaConfig = AREA_CONFIG[goal.area] || AREA_CONFIG.tecnica;
+                            const statusInfo = STATUS_ICONS[goal.estado] || STATUS_ICONS.pendiente;
+                            const StatusIcon = statusInfo.icon;
+
+                            return (
+                              <div
+                                key={goal.id}
+                                className="p-3.5 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-300 transition"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span
+                                      className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${areaConfig.badgeClass}`}
+                                    >
+                                      {areaConfig.label}
+                                    </span>
+                                    <span className="font-semibold text-slate-800 text-sm">{goal.descripcion}</span>
+                                  </div>
+                                  <p className="text-xs text-slate-500">
+                                    <strong className="text-slate-600">Indicador:</strong> {goal.indicadorExito}
+                                  </p>
                                 </div>
-                                <p className="text-xs text-slate-500">
-                                  <strong className="text-slate-600">Indicador:</strong> {goal.indicadorExito}
-                                </p>
-                              </div>
 
-                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleGoalStatus(meso, goal.id)}
-                                  className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition ${
-                                    goal.estado === 'cumplido'
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                      : goal.estado === 'no_cumplido'
-                                      ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                      : goal.estado === 'en_progreso'
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                                  }`}
-                                  title="Haz clic para cambiar estado"
-                                >
-                                  <StatusIcon className={`w-3.5 h-3.5 ${statusInfo.colorClass}`} />
-                                  <span>{statusInfo.label}</span>
-                                </button>
+                                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleGoalStatus(meso, goal.id)}
+                                    className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                                      goal.estado === 'cumplido'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                        : goal.estado === 'no_cumplido'
+                                        ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                        : goal.estado === 'en_progreso'
+                                        ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                    title="Haz clic para cambiar estado"
+                                  >
+                                    <StatusIcon className={`w-3.5 h-3.5 ${statusInfo.colorClass}`} />
+                                    <span>{statusInfo.label}</span>
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteGoal(meso, goal.id)}
-                                  className="p-1 text-slate-300 hover:text-red-600 rounded transition"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteGoal(meso, goal.id)}
+                                    className="p-1 text-slate-300 hover:text-red-600 rounded transition cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

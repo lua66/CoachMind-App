@@ -16,9 +16,9 @@ import {
 } from './philosophyService';
 
 const STORAGE_KEYS = {
-  SEASON: 'coachmind_planning_season_v1',
-  MESOCYCLES: 'coachmind_planning_mesocycles_v1',
-  MICROCYCLES: 'coachmind_planning_microcycles_v1',
+  SEASON: 'coachmind_planning_season_v2',
+  MESOCYCLES: 'coachmind_planning_mesocycles_v2',
+  MICROCYCLES: 'coachmind_planning_microcycles_v2',
 };
 
 class PlanningService {
