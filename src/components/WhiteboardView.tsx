@@ -192,9 +192,10 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
 
   // Multi-Frame / Multi-Phase Sequence State
   const [frames, setFrames] = useState<PlayFrame[]>([
-    { id: 'frame-1', title: 'Fase 1', tokens: [], paths: [] },
+    { id: 'frame-1', title: 'Fase 1', tokens: [], paths: [], description: '', notes: '' },
   ]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState<number>(0);
+  const [currentFrameDescription, setCurrentFrameDescription] = useState<string>('');
 
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const [paths, setPaths] = useState<TacticalPath[]>([]);
@@ -208,7 +209,7 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
   const [videoExportStatus, setVideoExportStatus] = useState('');
   const [exportedVideoName, setExportedVideoName] = useState<string | null>(null);
 
-  // Sync current active tokens/paths back to frames array
+  // Sync current active tokens/paths/description back to frames array
   const syncFrames = (newTokens: TacticalToken[], newPaths: TacticalPath[]) => {
     setTokens(newTokens);
     setPaths(newPaths);
@@ -219,6 +220,8 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
           ...copy[currentFrameIndex],
           tokens: newTokens,
           paths: newPaths,
+          description: currentFrameDescription,
+          notes: currentFrameDescription,
         };
       } else {
         copy.push({
@@ -226,7 +229,26 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
           title: `Fase ${copy.length + 1}`,
           tokens: newTokens,
           paths: newPaths,
+          description: currentFrameDescription,
+          notes: currentFrameDescription,
         });
+      }
+      return copy;
+    });
+  };
+
+  // Handle description change for the active variant/phase
+  const handleFrameDescriptionChange = (newDesc: string) => {
+    setCurrentFrameDescription(newDesc);
+    setTacticNotes(newDesc);
+    setFrames((prev) => {
+      const copy = [...prev];
+      if (copy[currentFrameIndex]) {
+        copy[currentFrameIndex] = {
+          ...copy[currentFrameIndex],
+          description: newDesc,
+          notes: newDesc,
+        };
       }
       return copy;
     });
@@ -359,6 +381,8 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
         ...currentUpdatedFrames[currentFrameIndex],
         tokens,
         paths,
+        description: currentFrameDescription,
+        notes: currentFrameDescription,
       };
     }
 
@@ -367,6 +391,8 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
       title: `Fase ${currentUpdatedFrames.length + 1}`,
       tokens: nextTokens,
       paths: [],
+      description: '',
+      notes: '',
     };
 
     const updatedFrames = [...currentUpdatedFrames, newFrame];
@@ -374,13 +400,42 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
     setCurrentFrameIndex(updatedFrames.length - 1);
     setTokens(nextTokens);
     setPaths([]);
+    setCurrentFrameDescription('');
+    setTacticNotes('');
   };
 
   const handleSelectFrame = (index: number) => {
     if (index < 0 || index >= frames.length) return;
+
+    // Save current frame tokens, paths, and description
+    setFrames((prev) => {
+      const copy = [...prev];
+      if (copy[currentFrameIndex]) {
+        copy[currentFrameIndex] = {
+          ...copy[currentFrameIndex],
+          tokens,
+          paths,
+          description: currentFrameDescription,
+          notes: currentFrameDescription,
+        };
+      }
+      return copy;
+    });
+
+    const targetFrame = frames[index];
     setCurrentFrameIndex(index);
-    setTokens(frames[index].tokens);
-    setPaths(frames[index].paths);
+    if (targetFrame) {
+      setTokens(targetFrame.tokens || []);
+      setPaths(targetFrame.paths || []);
+      const frameDesc =
+        targetFrame.description !== undefined
+          ? targetFrame.description
+          : targetFrame.notes !== undefined
+          ? targetFrame.notes
+          : '';
+      setCurrentFrameDescription(frameDesc);
+      setTacticNotes(frameDesc);
+    }
   };
 
   const handleDeleteFrame = (index: number) => {
@@ -394,8 +449,11 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
     setFrames(renumbered);
     const nextIdx = Math.min(index, renumbered.length - 1);
     setCurrentFrameIndex(nextIdx);
-    setTokens(renumbered[nextIdx].tokens);
-    setPaths(renumbered[nextIdx].paths);
+    setTokens(renumbered[nextIdx]?.tokens || []);
+    setPaths(renumbered[nextIdx]?.paths || []);
+    const nextDesc = renumbered[nextIdx]?.description || renumbered[nextIdx]?.notes || '';
+    setCurrentFrameDescription(nextDesc);
+    setTacticNotes(nextDesc);
   };
 
   // Saved plays local storage management
@@ -952,12 +1010,16 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
       title: 'Fase 1',
       tokens: [],
       paths: [],
+      description: '',
+      notes: '',
     };
     setFrames([initialFrame]);
     setCurrentFrameIndex(0);
     setTokens([]);
     setPaths([]);
     setBaseTokens([]);
+    setCurrentFrameDescription('');
+    setTacticNotes('');
     setNextPlayerANumber(1);
     setNextPlayerBNumber(1);
     setIsPlaying(false);
@@ -995,7 +1057,6 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
     setTacticName(`Táctica ${savedPlays.length + 1}`);
     const todayStr = new Date().toISOString().split('T')[0];
     setTacticDate(todayStr);
-    setTacticNotes('');
     setIsSaveModalOpen(true);
   };
 
@@ -1027,27 +1088,50 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
       });
     }
 
-    const currentFramesState =
+    const currentFramesState: PlayFrame[] =
       frames.length > 0
-        ? frames
+        ? frames.map((f, i) => {
+            if (i === currentFrameIndex) {
+              return {
+                ...f,
+                tokens: [...tokens],
+                paths: [...paths],
+                description: currentFrameDescription,
+                notes: currentFrameDescription,
+              };
+            }
+            return {
+              ...f,
+              description: f.description !== undefined ? f.description : (f.notes || ''),
+              notes: f.notes !== undefined ? f.notes : (f.description || ''),
+            };
+          })
         : [
             {
               id: `frame-${Date.now()}`,
               title: 'Fase 1',
               tokens: [...tokens],
               paths: [...paths],
+              description: currentFrameDescription,
+              notes: currentFrameDescription,
             },
           ];
+
+    const overallNotes =
+      tacticNotes.trim() ||
+      currentFramesState[0]?.description ||
+      currentFramesState[0]?.notes ||
+      '';
 
     const newPlay: SavedPlay = {
       id: `play-${Date.now()}`,
       title: tacticName.trim(),
       createdAt: formattedDate,
       category: tacticCategory,
-      notes: tacticNotes.trim(),
+      notes: overallNotes,
       tokens: [...tokens],
       paths: [...paths],
-      frames: [...currentFramesState],
+      frames: currentFramesState,
     };
 
     const updated = [newPlay, ...savedPlays];
@@ -1132,23 +1216,50 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
     setProgress(0);
 
     if (play.frames && play.frames.length > 0) {
-      setFrames(play.frames);
+      const loadedFrames: PlayFrame[] = play.frames.map((f, i) => ({
+        ...f,
+        description:
+          f.description !== undefined
+            ? f.description
+            : f.notes !== undefined
+            ? f.notes
+            : i === 0
+            ? play.notes || ''
+            : '',
+        notes:
+          f.notes !== undefined
+            ? f.notes
+            : f.description !== undefined
+            ? f.description
+            : i === 0
+            ? play.notes || ''
+            : '',
+      }));
+      setFrames(loadedFrames);
       setCurrentFrameIndex(0);
-      setTokens(play.frames[0].tokens);
-      setPaths(play.frames[0].paths);
-      setBaseTokens(play.frames[0].tokens);
+      setTokens(loadedFrames[0].tokens || []);
+      setPaths(loadedFrames[0].paths || []);
+      setBaseTokens(loadedFrames[0].tokens || []);
+      const initialDesc =
+        loadedFrames[0].description || loadedFrames[0].notes || play.notes || '';
+      setCurrentFrameDescription(initialDesc);
+      setTacticNotes(initialDesc);
     } else {
       const singleFrame: PlayFrame = {
         id: `frame-${Date.now()}`,
         title: 'Fase 1',
         tokens: play.tokens || [],
         paths: play.paths || [],
+        description: play.notes || '',
+        notes: play.notes || '',
       };
       setFrames([singleFrame]);
       setCurrentFrameIndex(0);
       setTokens(play.tokens || []);
       setPaths(play.paths || []);
       setBaseTokens(play.tokens || []);
+      setCurrentFrameDescription(play.notes || '');
+      setTacticNotes(play.notes || '');
     }
     
     // Auto start play
@@ -1565,6 +1676,26 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
               );
             })}
           </div>
+
+          {/* Indicaciones específicas de la Fase / Variante en el Visor */}
+          {(frames[isPlaying ? activeAnimFrameIdx : currentFrameIndex]?.description ||
+            frames[isPlaying ? activeAnimFrameIdx : currentFrameIndex]?.notes) && (
+            <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 flex items-start gap-2.5">
+              <FileText className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300">
+                <span className="font-bold text-amber-400 block text-[11px] uppercase tracking-wider mb-0.5">
+                  {frames[isPlaying ? activeAnimFrameIdx : currentFrameIndex]?.title ||
+                    `Fase ${(isPlaying ? activeAnimFrameIdx : currentFrameIndex) + 1}`} - Instrucciones Tácticas:
+                </span>
+                <p className="italic">
+                  "
+                  {frames[isPlaying ? activeAnimFrameIdx : currentFrameIndex]?.description ||
+                    frames[isPlaying ? activeAnimFrameIdx : currentFrameIndex]?.notes}
+                  "
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Botón Inferior: Volver a la Sección de Pizarra */}
@@ -2135,8 +2266,31 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
               })}
             </div>
 
+            {/* Active Variant/Phase Description Field */}
+            <div className="pt-2.5 border-t border-slate-700/60 space-y-1.5">
+              <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Descripción de {frames[currentFrameIndex]?.title || `Fase ${currentFrameIndex + 1}`} (Variante Actual)</span>
+                </span>
+                {frames.length > 1 && (
+                  <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold">
+                    Pizarra {currentFrameIndex + 1} de {frames.length}
+                  </span>
+                )}
+              </label>
+              <textarea
+                rows={2}
+                disabled={isPlaying}
+                value={currentFrameDescription}
+                onChange={(e) => handleFrameDescriptionChange(e.target.value)}
+                placeholder={`Instrucciones o descripción para ${frames[currentFrameIndex]?.title || `Fase ${currentFrameIndex + 1}`}: cortes, bloqueos, opciones de pase...`}
+                className="w-full bg-slate-950 text-white border border-slate-700 rounded-xl p-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder:text-slate-500 disabled:opacity-60"
+              />
+            </div>
+
             <p className="text-[11px] text-slate-400 italic">
-              💡 <strong>Tip:</strong> Dibuja los trazos de la Fase 1 y presiona <strong>+ Añadir Fase</strong>. Las fichas y el balón comenzarán automáticamente en sus nuevas posiciones para el Paso 2.
+              💡 <strong>Tip:</strong> Dibuja los trazos y escribe las indicaciones de la Fase 1, luego presiona <strong>+ Añadir Fase</strong> para crear una variante/fase con su propia descripción.
             </p>
           </div>
 
@@ -2678,14 +2832,21 @@ export const WhiteboardView: React.FC<WhiteboardViewProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5 text-amber-400" />
-                  Notas o Instrucciones para el Entrenador (Opcional)
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-amber-400" />
+                    Notas o Descripción de {frames[currentFrameIndex]?.title || `Fase ${currentFrameIndex + 1}`} (Opcional)
+                  </span>
+                  {frames.length > 1 && (
+                    <span className="text-[10px] text-amber-300 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                      Pizarra {currentFrameIndex + 1} de {frames.length}
+                    </span>
+                  )}
                 </label>
                 <textarea
                   rows={2}
-                  value={tacticNotes}
-                  onChange={(e) => setTacticNotes(e.target.value)}
+                  value={currentFrameDescription}
+                  onChange={(e) => handleFrameDescriptionChange(e.target.value)}
                   placeholder="Ej: El base lee el bloqueo directo, si salta el 5 pasa al tirador en la esquina."
                   className="w-full bg-slate-950 text-white border border-slate-700 rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />

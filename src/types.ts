@@ -293,6 +293,8 @@ export interface PlayFrame {
   title: string;
   tokens: TacticalToken[];
   paths: TacticalPath[];
+  description?: string;
+  notes?: string;
 }
 
 export interface SavedPlay {
